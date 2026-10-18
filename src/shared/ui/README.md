@@ -6,3 +6,4 @@
 - 스타일: styles/{tokens, basic, overlays, tabs, toast}.css 는 원본 그대로. `theme.css`가 필담 색으로 `--gc-*`를 덮어쓰고, `app.css`가 import 순서(tokens → theme → basic → overlays → tabs → toast)와 Tailwind `@theme`, global.css/composed.css 중 필요한 규칙만 합친다.
 - 수정한 곳: composed/confirm-dialog.tsx — `trigger` 선택, `isOpen`/`onOpenChange` 제어 모드 추가.
 - 자체 추가: Wordmark.tsx, layout/AppShell.tsx
+- 추가 복사: basic/slider (Slider, 원본 그대로)

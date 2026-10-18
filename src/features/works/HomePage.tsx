@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link } from "react-router";
 import { ChevronDown, Ellipsis, Plus, User } from "lucide-react";
 import type { Work, WorkSummary } from "../../../shared/types";
 import { api } from "../../shared/api";
@@ -13,11 +13,11 @@ import { Dialog } from "../../shared/ui/overlays/dialog";
 import { Menu } from "../../shared/ui/overlays/menu";
 import { ConfirmDialog } from "../../shared/ui/composed/confirm-dialog";
 import { Wordmark } from "../../shared/ui/Wordmark";
+import { NewWorkFlow } from "./NewWorkFlow";
 import { logout, useAuth } from "../auth/auth";
 
 export function HomePage() {
   const { me, setMe } = useAuth();
-  const navigate = useNavigate();
   const { data: works, error, loading, reload, setData } = useApi((s) => api.get<WorkSummary[]>("/api/works", s), []);
   const [creating, setCreating] = useState(false);
   const [renaming, setRenaming] = useState<WorkSummary | null>(null);
@@ -89,17 +89,7 @@ export function HomePage() {
         )}
       </main>
 
-      <TitleDialog
-        isOpen={creating}
-        onClose={() => setCreating(false)}
-        heading="새 작품"
-        submitLabel="만들기"
-        initial=""
-        onSubmit={async (title) => {
-          const w = await api.post<Work>("/api/works", { title });
-          navigate(`/works/${w.id}`);
-        }}
-      />
+      <NewWorkFlow isOpen={creating} onClose={() => setCreating(false)} />
       <TitleDialog
         isOpen={!!renaming}
         onClose={() => setRenaming(null)}
