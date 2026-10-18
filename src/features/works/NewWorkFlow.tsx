@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import type { Graph, GraphSuggestion, ModelOption, OnboardResponse, TextDoc, Work } from "../../../shared/types";
+import type { Graph, ModelOption, OnboardResponse, TextDoc, Work } from "../../../shared/types";
 import { api } from "../../shared/api";
 import { useApi } from "../../shared/useApi";
 import { useMedia } from "../../shared/useMedia";
@@ -11,16 +11,9 @@ import { TextArea } from "../../shared/ui/basic/text-area";
 import { TextField } from "../../shared/ui/basic/text-field";
 import { Dialog, Drawer } from "../../shared/ui/overlays/dialog";
 import { Select } from "../../shared/ui/overlays/select";
-import { applySuggestions } from "../graph/suggestions";
+import { applySuggestions, describeSuggestion } from "../graph/suggestions";
 
 const TONES = ["담담한", "설레는", "어두운", "유쾌한"];
-const KIND = { character: "인물", place: "장소", faction: "세력", item: "사물" } as const;
-
-function describe(s: GraphSuggestion) {
-  if (s.type === "add-node") return { head: `${KIND[s.node.kind]} · ${s.node.name}`, body: s.node.description };
-  if (s.type === "add-edge") return { head: `${s.sourceName} ↔ ${s.targetName}`, body: s.label };
-  return { head: `${s.sourceName} ↔ ${s.targetName}`, body: `${s.label} 끝` };
-}
 
 /** 새 작품 만들기: 질문 3개 → AI 초안 → 확인 → 시작. 데스크탑은 Dialog, 모바일은 전체 화면 Drawer. */
 export function NewWorkFlow({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
@@ -119,11 +112,14 @@ function Flow() {
         await api.patch(`/api/works/${id}`, { title: title.trim() || "제목 없는 이야기", modelId: model });
         done.current.add("meta");
       }
-      for (const [name, text] of [["world", world], ["style", style]] as const) {
-        if (done.current.has(name)) continue;
-        const d = await api.get<TextDoc>(`/api/works/${id}/docs/${name}`);
-        await api.put(`/api/works/${id}/docs/${name}`, { text, baseUpdatedAt: d.updatedAt });
-        done.current.add(name);
+      if (!done.current.has("world")) {
+        if (world.trim()) await api.post(`/api/works/${id}/notes`, { title: "세계관", folder: "세계관", text: world });
+        done.current.add("world");
+      }
+      if (!done.current.has("style")) {
+        const d = await api.get<TextDoc>(`/api/works/${id}/docs/style`);
+        await api.put(`/api/works/${id}/docs/style`, { text: style, baseUpdatedAt: d.updatedAt });
+        done.current.add("style");
       }
       if (!done.current.has("graph")) {
         const g = await api.get<Graph>(`/api/works/${id}/graph`);
@@ -159,7 +155,7 @@ function Flow() {
           <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
             <legend className="mb-2 text-sm font-medium">인물·관계 (관계도에 넣을 것을 고르세요)</legend>
             {result.suggestions.map((s, i) => {
-              const d = describe(s);
+              const d = describeSuggestion(s);
               return (
                 <label key={i} className="flex min-h-11 cursor-pointer items-start gap-3 rounded-xl border border-line bg-surface p-3">
                   <input type="checkbox" className="mt-1 size-5 accent-[var(--gc-accent)]" checked={checked[i] ?? false} onChange={(e) => setChecked((c) => c.map((x, j) => (j === i ? e.target.checked : x)))} />

@@ -43,3 +43,20 @@ test("applySuggestions: 노드 고치기·지우기, 관계 지우기", () => {
   assert.equal(g.nodes.find((n) => n.name === "민지아")?.description, "주인공");
   assert.equal(g.edges.length, 0);
 });
+
+test("suggestionMarks: 바꿀 노드·지울 관계·유령 관계", async () => {
+  const { suggestionMarks } = await import("./suggestions.ts");
+  const g = {
+    nodes: [{ id: "a", name: "무겸", kind: "character", description: "" }, { id: "b", name: "이헌", kind: "character", description: "" }],
+    edges: [{ id: "e1", source: "a", target: "b", label: "적", fromChapterId: null, toChapterId: null }],
+    updatedAt: "",
+  } as never;
+  const r = suggestionMarks(g, [
+    { type: "update-node", name: "무겸", node: { description: "x" } },
+    { type: "remove-edge", sourceName: "이헌", targetName: "무겸", label: "적" },
+    { type: "add-edge", sourceName: "무겸", targetName: "이헌", label: "동맹", fromChapterId: null },
+    { type: "add-node", node: { name: "새", kind: "place", description: "" } },
+  ]);
+  assert.deepEqual(r.marks, { a: "change", e1: "remove", b: "change" });
+  assert.equal(r.ghosts.length, 1);
+});

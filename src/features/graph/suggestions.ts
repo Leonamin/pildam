@@ -82,3 +82,35 @@ export function describeSuggestion(s: GraphSuggestion, chapters: ChapterMeta[] =
     case "remove-edge": return { head: `${s.sourceName} ↔ ${s.targetName}`, body: `${s.label} 관계 지우기` };
   }
 }
+
+export type Mark = "change" | "remove";
+export type Ghost = { id: string; source: string; target: string; label: string };
+
+/** 아직 반영하지 않은 제안이 닿는 노드·관계 id (그림 위 강조용). add-edge는 점선 유령 관계로, add-node는 보여 주지 않는다. */
+export function suggestionMarks(graph: Graph, suggestions: GraphSuggestion[]): { marks: Record<string, Mark>; ghosts: Ghost[] } {
+  const marks: Record<string, Mark> = {};
+  const ghosts: Ghost[] = [];
+  const id = (name: string) => graph.nodes.find((n) => n.name === name)?.id;
+  const between = (a?: string, b?: string, label?: string) =>
+    graph.edges.filter((e) => a && b && (label === undefined || e.label === label) && ((e.source === a && e.target === b) || (e.source === b && e.target === a)));
+  suggestions.forEach((s, i) => {
+    if (s.type === "update-node") {
+      const n = id(s.name);
+      if (n) marks[n] ??= "change";
+    } else if (s.type === "remove-node") {
+      const n = id(s.name);
+      if (!n) return;
+      marks[n] = "remove";
+      for (const e of graph.edges) if (e.source === n || e.target === n) marks[e.id] = "remove";
+    } else if (s.type === "add-edge") {
+      const a = id(s.sourceName), b = id(s.targetName);
+      for (const n of [a, b]) if (n) marks[n] ??= "change";
+      if (a && b) ghosts.push({ id: `ghost-${i}`, source: a, target: b, label: s.label });
+    } else if (s.type === "end-edge") {
+      for (const e of between(id(s.sourceName), id(s.targetName), s.label)) marks[e.id] ??= "change";
+    } else if (s.type === "remove-edge") {
+      for (const e of between(id(s.sourceName), id(s.targetName), s.label)) marks[e.id] = "remove";
+    }
+  });
+  return { marks, ghosts };
+}

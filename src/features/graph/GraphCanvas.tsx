@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import cytoscape from "cytoscape";
 import type { GraphEdge, GraphNode } from "../../../shared/types";
 import { KINDS } from "./graphUtils";
+import type { Ghost, Mark } from "./suggestions";
 
 type Pos = Record<string, { x: number; y: number }>;
 const posKey = (workId: string) => `pildam:graph-pos:${workId}`;
@@ -47,12 +48,14 @@ function spot(taken: XY[]): XY {
 const FONT = "Pretendard, system-ui, sans-serif";
 
 export function GraphCanvas({
-  workId, nodes, edges, highlight, selectedId, fitTick, onSelect,
+  workId, nodes, edges, highlight, marks, ghosts, selectedId, fitTick, onSelect,
 }: {
   workId: string;
   nodes: GraphNode[];
   edges: GraphEdge[];
   highlight: Set<string>;
+  marks: Record<string, Mark>; // AI 제안이 닿는 노드·관계 (반영 전)
+  ghosts: Ghost[]; // 제안된 새 관계 (점선)
   selectedId: string | null;
   fitTick: number;
   onSelect: (id: string | null) => void;
@@ -93,6 +96,11 @@ export function GraphCanvas({
             "text-background-shape": "roundrectangle",
           },
         },
+        { selector: "node.mk-change", style: { "border-width": 5, "border-color": "#245bd8", "overlay-color": "#245bd8", "overlay-opacity": 0.12, "overlay-padding": 6 } },
+        { selector: "node.mk-remove", style: { "border-width": 4, "border-color": "#b52a36", "border-style": "dashed", opacity: 0.65 } },
+        { selector: "edge.mk-change", style: { width: 5, "line-color": "#245bd8", color: "#245bd8", "font-weight": 700 } },
+        { selector: "edge.mk-remove", style: { width: 4, "line-color": "#b52a36", "line-style": "dashed", color: "#b52a36", "font-weight": 700 } },
+        { selector: "edge.ghost", style: { width: 3, "line-color": "#245bd8", "line-style": "dashed", color: "#245bd8", opacity: 0.8 } },
         { selector: "edge.hl", style: { width: 5, "line-color": "#b4424f", color: "#963543", "font-weight": 700 } },
       ],
     });
@@ -122,11 +130,14 @@ export function GraphCanvas({
     cy.add([
       ...nodes.map((n) => {
         if (!known[n.id]) fresh.push(n.id);
-        return { group: "nodes" as const, data: { id: n.id, name: n.name || " ", kind: n.kind, w: Math.max(64, [...n.name].length * 16 + 32) }, position: known[n.id] };
+        return { group: "nodes" as const, data: { id: n.id, name: n.name || " ", kind: n.kind, w: Math.max(64, [...n.name].length * 16 + 32) }, position: known[n.id], classes: marks[n.id] ? `mk-${marks[n.id]}` : "" };
       }),
       ...edges
         .filter((e) => ids.has(e.source) && ids.has(e.target))
-        .map((e) => ({ group: "edges" as const, data: { id: e.id, source: e.source, target: e.target, label: e.label }, classes: highlight.has(e.id) ? "hl" : "" })),
+        .map((e) => ({ group: "edges" as const, data: { id: e.id, source: e.source, target: e.target, label: e.label }, classes: [highlight.has(e.id) && "hl", marks[e.id] && `mk-${marks[e.id]}`].filter(Boolean).join(" ") })),
+      ...ghosts
+        .filter((g) => ids.has(g.source) && ids.has(g.target))
+        .map((g) => ({ group: "edges" as const, data: { id: g.id, source: g.source, target: g.target, label: g.label }, classes: "ghost" })),
     ]);
     if (fresh.length > 0) {
       if (fresh.length === nodes.length) {
@@ -150,7 +161,7 @@ export function GraphCanvas({
     if (nodes.length > 0) didFit.current = true;
     if (selectedId) cy.getElementById(selectedId).select();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodes, edges, highlight, workId]);
+  }, [nodes, edges, highlight, marks, ghosts, workId]);
 
   useEffect(() => {
     const cy = cyRef.current;

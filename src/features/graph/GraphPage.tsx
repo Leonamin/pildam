@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "react-router";
-import { Maximize, Plus } from "lucide-react";
-import type { Graph, GraphNode, NodeKind, Work } from "../../../shared/types";
+import { useNavigate, useParams } from "react-router";
+import { Maximize, Network, Plus, Sparkles } from "lucide-react";
+import type { Graph, GraphNode, GraphSuggestion, NodeKind, NoteMeta, Work } from "../../../shared/types";
 import { api, ApiRequestError } from "../../shared/api";
 import { useApi } from "../../shared/useApi";
 import { useMedia } from "../../shared/useMedia";
@@ -18,7 +18,8 @@ import { Dialog, Drawer } from "../../shared/ui/overlays/dialog";
 import { Select } from "../../shared/ui/overlays/select";
 import { Tabs } from "../../shared/ui/overlays/tabs";
 import { useToast } from "../../shared/ui/overlays/toast";
-import { edgesAt } from "./suggestions";
+import { applySuggestions, edgesAt, suggestionMarks } from "./suggestions";
+import { GraphAiPanel } from "./GraphAiPanel";
 import { GraphCanvas } from "./GraphCanvas";
 import { NodeDetail, type Edit } from "./NodeDetail";
 import { KINDS, changeLines, changedAt, nameOf } from "./graphUtils";
@@ -34,6 +35,7 @@ export function GraphPage() {
     },
     [workId],
   );
+  const { data: notes } = useApi((s) => api.get<NoteMeta[]>(`/api/works/${workId}/notes`, s), [workId]);
   return (
     <AppShell items={workNav(workId)}>
       {error ? (
@@ -46,18 +48,41 @@ export function GraphPage() {
         <main className="p-6"><Skeleton width="100%" height={320} /></main>
       ) : (
         // key: 충돌로 최신본을 다시 받으면 편집 상태를 새로 시작한다.
-        <GraphEditor key={data.graph.updatedAt} workId={workId} work={data.work} initial={data.graph} onConflict={reload} />
+        <GraphEditor key={data.graph.updatedAt} workId={workId} work={data.work} notes={notes ?? []} initial={data.graph} onConflict={reload} />
       )}
     </AppShell>
   );
 }
 
 type Status = "saved" | "saving" | "error";
+type PanelKey = "graph" | "ai";
 const newId = () => crypto.randomUUID().slice(0, 8);
+const STORE = "pildam.graph.panels";
+function loadPanels(): Record<PanelKey, boolean> {
+  try {
+    return { graph: true, ai: true, ...JSON.parse(localStorage.getItem(STORE) ?? "{}") };
+  } catch {
+    return { graph: true, ai: true };
+  }
+}
 
-function GraphEditor({ workId, work, initial, onConflict }: { workId: string; work: Work; initial: Graph; onConflict: () => void }) {
+function GraphEditor({ workId, work: workProp, notes, initial, onConflict }: { workId: string; work: Work; notes: NoteMeta[]; initial: Graph; onConflict: () => void }) {
   const { notify } = useToast();
+  const navigate = useNavigate();
   const wide = useMedia("(min-width: 768px)");
+  const [work, setWork] = useState(workProp); // AI를 바꾸면 갱신된다
+  const [panels, setPanels] = useState(loadPanels);
+  const [mobilePanel, setMobilePanel] = useState<PanelKey>("graph");
+  const [pending, setPending] = useState<GraphSuggestion[]>([]); // 아직 반영도 무시도 안 한 AI 제안 (그림에 강조)
+  const toggle = (k: PanelKey) => {
+    if (!wide) return setMobilePanel(k);
+    setPanels((p) => {
+      const n = { ...p, [k]: !p[k] };
+      try { localStorage.setItem(STORE, JSON.stringify(n)); } catch { /* 저장 못 해도 동작 */ }
+      return n;
+    });
+  };
+  const visible = (k: PanelKey) => (wide ? panels[k] : mobilePanel === k);
   const chapters = work.chapters;
   const order = useMemo(() => chapters.map((c) => c.id), [chapters]);
 
@@ -78,6 +103,7 @@ function GraphEditor({ workId, work, initial, onConflict }: { workId: string; wo
   const timer = useRef<number | undefined>(undefined);
   const busy = useRef(false);
   const again = useRef(false);
+  const dirty = useRef(false); // 서버에 아직 못 보낸 편집이 있다
   const flush = useCallback(async () => {
     window.clearTimeout(timer.current);
     timer.current = undefined;
@@ -86,6 +112,7 @@ function GraphEditor({ workId, work, initial, onConflict }: { workId: string; wo
       return;
     }
     busy.current = true;
+    dirty.current = false;
     setStatus("saving");
     try {
       const r = await api.put<{ updatedAt: string }>(`/api/works/${workId}/graph`, { graph: latest.current, baseUpdatedAt: base.current });
@@ -97,6 +124,7 @@ function GraphEditor({ workId, work, initial, onConflict }: { workId: string; wo
         again.current = false;
         onConflict();
       } else {
+        dirty.current = true;
         setStatus("error");
       }
     } finally {
@@ -110,12 +138,32 @@ function GraphEditor({ workId, work, initial, onConflict }: { workId: string; wo
   const edit: Edit = useCallback(
     (fn) => {
       latest.current = fn(latest.current);
+      dirty.current = true;
       setGraph(latest.current);
       setStatus("saving");
       window.clearTimeout(timer.current);
       timer.current = window.setTimeout(() => void flush(), 800);
     },
     [flush],
+  );
+  /** 밀린 저장을 마치고(진행 중인 것까지) 기다린다. 못 마치면 던진다. */
+  const settle = useCallback(async () => {
+    if (dirty.current || timer.current !== undefined) await flush();
+    while (busy.current) await new Promise((r) => setTimeout(r, 30));
+    if (dirty.current) throw new Error("관계도를 아직 저장하지 못했어요. 저장된 뒤에 다시 반영해 주세요.");
+  }, [flush]);
+  /** AI 제안 반영: 내 저장을 먼저 끝내고 → 서버의 최신본에 얹어 저장 → 화면 상태를 그 결과로 맞춘다. */
+  const applyAi = useCallback(
+    async (list: GraphSuggestion[]) => {
+      await settle();
+      const g = await api.get<Graph>(`/api/works/${workId}/graph`);
+      const next = applySuggestions(g, list);
+      const r = await api.put<{ updatedAt: string }>(`/api/works/${workId}/graph`, { graph: next, baseUpdatedAt: g.updatedAt });
+      base.current = r.updatedAt;
+      latest.current = { ...next, updatedAt: r.updatedAt };
+      setGraph(latest.current);
+    },
+    [settle, workId],
   );
   // 화면을 떠날 때 남은 변경은 바로 저장
   useEffect(() => () => { if (timer.current !== undefined) void flush(); }, [flush]);
@@ -128,6 +176,7 @@ function GraphEditor({ workId, work, initial, onConflict }: { workId: string; wo
   const highlight = useMemo(() => (showAll || chapters.length === 0 ? new Set<string>() : changedAt(order, graph.edges, index)), [graph.edges, order, index, showAll, chapters.length]);
   const lines = useMemo(() => (showAll || chapters.length === 0 ? [] : changeLines(graph, order, index)), [graph, order, index, showAll, chapters.length]);
   const currentChapterId = showAll || chapters.length === 0 ? null : order[index];
+  const { marks, ghosts } = useMemo(() => suggestionMarks(graph, pending), [graph, pending]);
 
   function addNode(name: string, kind: NodeKind) {
     const n: GraphNode = { id: newId(), name, kind, description: "" };
@@ -140,7 +189,8 @@ function GraphEditor({ workId, work, initial, onConflict }: { workId: string; wo
   );
 
   return (
-    <main className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0">
+    <main className={`min-w-0 flex-1 flex-col pb-20 ${visible("graph") ? "flex" : "hidden"}`}>
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-2 md:px-6">
         <h1 className="m-0 text-lg font-semibold">관계도</h1>
         <div className="flex items-center gap-2">
@@ -181,7 +231,7 @@ function GraphEditor({ workId, work, initial, onConflict }: { workId: string; wo
             </div>
             <div className="min-h-0 flex-1 overflow-auto">
               {curView === "graph" ? (
-                <GraphCanvas workId={workId} nodes={graph.nodes} edges={shown} highlight={highlight} selectedId={selected} fitTick={fitTick} onSelect={setSelected} />
+                <GraphCanvas workId={workId} nodes={graph.nodes} edges={shown} highlight={highlight} marks={marks} ghosts={ghosts} selectedId={selected} fitTick={fitTick} onSelect={setSelected} />
               ) : (
                 <NodeList graph={graph} edges={shown} selected={selected} onSelect={setSelected} />
               )}
@@ -237,6 +287,49 @@ function GraphEditor({ workId, work, initial, onConflict }: { workId: string; wo
         }}
       />
     </main>
+    {!visible("graph") && !visible("ai") && (
+      <main className="grid min-w-0 flex-1 place-items-center p-6">
+        <Button style={{ minHeight: 64, paddingInline: 32, fontSize: 18 }} onClick={() => toggle("graph")}><Network size={22} aria-hidden="true" /> 관계도 열기</Button>
+      </main>
+    )}
+    <aside className={`h-full min-h-0 border-l border-line bg-surface-subtle/40 ${visible("ai") ? "" : "hidden"} ${wide && panels.graph ? "w-[320px] shrink-0 xl:w-[360px]" : "min-w-0 flex-1"}`}>
+      <GraphAiPanel
+        work={work}
+        notes={notes}
+        chapterId={currentChapterId}
+        onWork={setWork}
+        onOpenNote={(id) => navigate(`/works/${workId}?note=${id}`)}
+        apply={applyAi}
+        onPending={setPending}
+      />
+    </aside>
+    <GraphDock pressed={{ graph: visible("graph"), ai: visible("ai") }} onToggle={toggle} />
+    </div>
+  );
+}
+
+const DOCK: { key: PanelKey; label: string; icon: React.ReactNode }[] = [
+  { key: "graph", label: "관계도", icon: <Network size={18} aria-hidden="true" /> },
+  { key: "ai", label: "AI", icon: <Sparkles size={18} aria-hidden="true" /> },
+];
+/** 작업 화면의 PanelDock과 같은 모양 (켜고 끄는 대상만 다르다). */
+function GraphDock({ pressed, onToggle }: { pressed: Record<PanelKey, boolean>; onToggle: (k: PanelKey) => void }) {
+  return (
+    <div role="group" aria-label="화면 전환" className="fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 gap-1 rounded-full border border-line bg-surface p-1.5 shadow-[var(--gc-shadow)]">
+      {DOCK.map((it) => (
+        <button
+          key={it.key}
+          type="button"
+          aria-pressed={pressed[it.key]}
+          onClick={() => onToggle(it.key)}
+          className={`flex min-h-11 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border-0 px-3 text-sm font-medium sm:px-4 ${
+            pressed[it.key] ? "bg-accent text-on-accent" : "bg-transparent text-ink hover:bg-black/5"
+          }`}
+        >
+          {it.icon} {it.label}
+        </button>
+      ))}
+    </div>
   );
 }
 
