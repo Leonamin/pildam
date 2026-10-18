@@ -9,9 +9,10 @@ DATA=/opt/pildam-data
 KEEP=5
 
 # /opt는 root 소유라 처음 한 번만 sudo로 폴더를 만들어 넘겨받는다.
-for d in "$ROOT/releases" "$DATA"; do
-  [ -d "$d" ] || { sudo mkdir -p "$d" && sudo chown -R "$(id -un):$(id -gn)" "$ROOT" "$DATA"; }
-done
+if [ ! -d "$ROOT/releases" ] || [ ! -d "$DATA" ]; then
+  sudo mkdir -p "$ROOT/releases" "$DATA"
+  sudo chown -R "$(id -un):$(id -gn)" "$ROOT" "$DATA"
+fi
 
 cd "$REPO"
 pnpm install --frozen-lockfile
@@ -19,7 +20,7 @@ pnpm build
 
 REL=$ROOT/releases/$(date -u +%Y%m%dT%H%M%SZ)
 mkdir -p "$REL"
-cp -r dist server shared package.json pnpm-lock.yaml "$REL"/
+cp -r dist server shared package.json pnpm-lock.yaml pnpm-workspace.yaml "$REL"/
 (cd "$REL" && pnpm install --prod --frozen-lockfile)
 
 # 링크를 새로 만들어 rename으로 바꿔치기 (중간 상태가 없다)

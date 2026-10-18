@@ -25,6 +25,5 @@ okf_version: "0.1"
 ## 미검증
 
 - 실제 CLI로 선택 수정·요약·새 작품 초안의 JSON 해석 (연습용 AI로만 확인. 대필 스트리밍은 세 CLI 모두 확인)
-- `deploy/deploy.sh` 실행과 systemd 서비스 설치
 - 태블릿 폭, 터치 제스처(선택·끌기)
 - Storybook 스토리 38개 중 20개는 빌드만 확인
