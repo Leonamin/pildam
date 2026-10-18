@@ -1,5 +1,5 @@
 // 고정 픽스처. 날짜·ID는 항상 같은 값이라 스토리가 매번 같은 화면을 만든다.
-import type { Chapter, ChatEntry, Graph, ModelOption, SnapshotMeta, SummarizeResponse, Work, WorkSummary, OnboardResponse } from "../shared/types";
+import type { Chapter, ChatEntry, Graph, ModelOption, NoteMeta, SnapshotMeta, SummarizeResponse, Work, WorkSummary, OnboardResponse } from "../shared/types";
 
 export const ME = { username: "yuna" };
 export const WORK_ID = "w1";
@@ -36,10 +36,9 @@ export const CHAPTER_TEXT: Record<string, string> = {
   c3: "극장 문에는 '당분간 쉽니다'라는 쪽지가 붙어 있었다.\n\n서윤은 쪽지를 오래 들여다보았다. 새벽회의 인장이 구석에 찍혀 있었다.",
 };
 
+const WORLD_TEXT = "비가 잦은 항구 도시. 오래된 극장 '하늘 극장'을 중심으로 이야기가 흐른다.";
 export const DOCS = {
-  world: "비가 잦은 항구 도시. 오래된 극장 '하늘 극장'을 중심으로 이야기가 흐른다.",
-  style: "담담하고 짧은 문장. 대화는 큰따옴표.",
-  notes: "",
+  style: "담담하고 짧은 문장. 대화는 큰따옴표.\n\n감정은 직접 말하지 않고 사물과 날씨로 보여 준다.\n\n한 문단은 다섯 문장을 넘기지 않는다.\n\n장면 끝은 여운을 남기며 닫는다.",
 };
 
 export const chapterOf = (id: string): Chapter => {
@@ -65,8 +64,39 @@ export const GRAPH: Graph = {
 };
 export const EMPTY_GRAPH: Graph = { updatedAt: "2026-01-02T09:00:00.000Z", nodes: [], edges: [] };
 
-export const CHAT: ChatEntry[] = [
-  { id: "m1", at: "2026-01-10T09:00:00.000Z", kind: "write", instruction: "우산을 같이 쓰는 장면", modelId: "claude:opus", resultPreview: "도현은 우산 하나를 서윤 쪽으로 기울였다." },
+const ent = (id: string, kind: ChatEntry["kind"], instruction: string, resultPreview: string, usedNotes?: string[]): ChatEntry =>
+  ({ id, at: "2026-01-10T09:00:00.000Z", kind, instruction, modelId: "claude:opus", resultPreview, usedNotes });
+export const CHAT_BY_TARGET: Record<string, ChatEntry[]> = {
+  "chapter:c2": [
+    ent("m1", "write", "우산을 같이 쓰는 장면", "도현은 우산 하나를 서윤 쪽으로 기울였다.", ["세계관 › 하늘 극장", "인물 › 서윤"]),
+    ent("m2", "rewrite", "더 담담하게", "서윤은 대답 대신 웃었다."),
+  ],
+  style: [ent("s1", "edit", "문장을 더 짧게", "담담하고 짧은 문장.", [])],
+  "note:nw1": [ent("n1", "edit", "정리해 줘", "비가 잦은 항구 도시.", ["세계관 › 하늘 극장"])],
+  graph: [ent("g1", "graph", "서윤과 새벽회 관계를 정리해 줘", "서윤 ↔ 새벽회 적대 …", ["인물 › 서윤", "세계관 › 하늘 극장"])],
+};
+export const CHAT: ChatEntry[] = CHAT_BY_TARGET["chapter:c2"];
+
+const T = "2026-01-15T09:00:00.000Z";
+const mk = (id: string, title: string, folder: string, text: string, pinned = false): NoteMeta =>
+  ({ id, title, folder, pinned, recap: text.replace(/\s+/g, " ").slice(0, 40), size: text.length, updatedAt: T });
+const LONG = ["■ 1. 항구의 역사", "■ 2. 극장의 내력", "■ 3. 새벽회의 규칙", "■ 4. 비의 계절"]
+  .map((h, i) => `${h}\n` + `${["항구", "극장", "모임", "계절"][i]}에 관한 긴 설명이 이어진다. `.repeat(45)).join("\n\n");
+export const NOTE_TEXT: Record<string, string> = {
+  nw1: WORLD_TEXT,
+  nw2: "새벽회는 극장을 사들이려는 비밀 모임이다. 인장은 새벽별 모양.",
+  np1: "서윤. 극장 단골. 말수가 적고 우산을 잘 잃어버린다.",
+  np2: "도현. 영사기사. 서윤의 옛 연인.",
+  nm1: "3화에서 쪽지를 발견하게 할 것. 필름 상자는 아직 비밀.",
+  nlong: LONG,
+};
+export const NOTES: NoteMeta[] = [
+  mk("nw1", "하늘 극장", "세계관", NOTE_TEXT.nw1, true),
+  mk("nw2", "새벽회", "세계관", NOTE_TEXT.nw2),
+  mk("np1", "서윤", "인물", NOTE_TEXT.np1),
+  mk("np2", "도현", "인물", NOTE_TEXT.np2),
+  mk("nm1", "메모", "", NOTE_TEXT.nm1),
+  mk("nlong", "설정 자료 모음", "자료", NOTE_TEXT.nlong),
 ];
 export const SNAPSHOTS: SnapshotMeta[] = [
   { id: "s1", createdAt: "2026-01-10T08:00:00.000Z", reason: "ai-write", preview: "비가 내리던 저녁…" },
@@ -74,6 +104,7 @@ export const SNAPSHOTS: SnapshotMeta[] = [
 
 export const SUMMARIZE: SummarizeResponse = {
   summary: "서윤은 닫힌 극장 앞에서 새벽회의 인장을 발견한다.",
+  usedNotes: ["세계관 › 하늘 극장"],
   suggestions: [
     { type: "add-node", node: { name: "필름 상자", kind: "item", description: "극장 지하에 숨겨진 상자" } },
     { type: "add-edge", sourceName: "서윤", targetName: "새벽회", label: "추적", fromChapterId: CH.c3 },
@@ -83,7 +114,7 @@ export const SUMMARIZE: SummarizeResponse = {
 
 export const ONBOARD: OnboardResponse = {
   title: "비 오는 날의 극장",
-  world: DOCS.world,
+  world: WORLD_TEXT,
   style: DOCS.style,
   suggestions: [
     { type: "add-node", node: { name: "서윤", kind: "character", description: "극장 단골" } },
@@ -92,3 +123,6 @@ export const ONBOARD: OnboardResponse = {
 };
 
 export const AI_DELTAS = ["서윤은 쪽지를 접어 ", "주머니에 넣었다. ", "빗줄기가 ", "더 굵어지고 있었다."];
+
+/** 목 AI가 "참고했다"고 알리는 노트 */
+export const USED = ["세계관 › 하늘 극장", "인물 › 서윤"];

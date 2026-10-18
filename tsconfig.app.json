@@ -23,7 +23,8 @@
   },
   "include": [
     "src",
-    "shared"
+    "shared",
+    ".storybook/*.ts", ".storybook/*.tsx"
   ],
   "exclude": [
     "src/**/*.test.ts"
