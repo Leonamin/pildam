@@ -157,8 +157,8 @@ async function context(workId: string, chapterId: string, manuscript: string): P
   const work = await getWork(workId);
   const cur = work.chapters.findIndex((c) => c.id === chapterId);
   if (cur < 0) fail(404, "not_found", "화를 찾을 수 없어요.");
-  const [world, style, graph, chat] = await Promise.all([
-    getDoc(workId, "world"), getDoc(workId, "style"), getGraph(workId), readChat(workId, chapterId, 5),
+  const [world, style, notes, graph, chat] = await Promise.all([
+    getDoc(workId, "world"), getDoc(workId, "style"), getDoc(workId, "notes"), getGraph(workId), readChat(workId, chapterId, 5),
   ]);
   const idx = (id: string | null) => (id ? work.chapters.findIndex((c) => c.id === id) : -1);
   // 지워진 화를 가리키는 경계(-1)는 열린 경계로 본다.
@@ -178,6 +178,7 @@ async function context(workId: string, chapterId: string, manuscript: string): P
   const sec = (title: string, body: string) => (body.trim() ? `[${title}]\n${body.trim()}\n\n` : "");
   return (
     sec("세계관", world.text) + sec("문체", style.text) +
+    sec("작가 메모·줄거리 계획 (앞으로 일어날 일도 담겨 있으니 현재 화보다 앞서 나가지 말 것)", notes.text) +
     sec(`인물·장소 (${cur + 1}화 시점)`, nodes.join("\n")) + sec(`관계 (${cur + 1}화 시점)`, edges.join("\n")) +
     sec("앞 화 요약", sums.join("\n")) +
     sec(`현재 원고 (${cur + 1}화 「${work.chapters[cur].title}」)`, ms || "(아직 비어 있음)") +
