@@ -451,12 +451,13 @@ ${instruction}
 출력 형식: {"reply":"짧은 한국어 답","suggestions":[...]}
 ${SUGGEST_FORMAT.replace('"label":"관계"}', '"label":"관계","fromChapter":시작하는 화 번호 또는 null(처음부터)}').replace('"label":"끝나는 관계"}', '"label":"끝나는 관계","toChapter":관계가 마지막으로 유효한 화 번호}')}${SUGGEST_MORE}
 ${JSON_RULES}`;
-  const first = graph.nodes[0];
+  const first = graph.nodes[0], last = graph.nodes.at(-1);
   const mock = JSON.stringify({
     reply: "연습용 AI가 관계도 제안을 만들었어요.",
     suggestions: [
       { type: "add-node", node: { name: "연습 인물", kind: "character", description: "연습용 AI가 제안한 인물" } },
       ...(first ? [{ type: "update-node", name: first.name, node: { description: `${first.description} (연습용 AI가 덧붙임)`.trim() } }] : []),
+      ...(last && last !== first ? [{ type: "remove-node", name: last.name }] : []), // 삭제 표시도 보이게
     ],
   });
   const { j } = await runJson(model, "edit-graph", prompt, c.req.raw.signal, mock) as { j: { reply?: unknown; suggestions?: unknown } | undefined };
