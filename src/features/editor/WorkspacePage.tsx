@@ -1,7 +1,7 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { FileText, Sparkles } from "lucide-react";
-import type { ChapterMeta, DocName, Work } from "../../../shared/types";
+import type { AiTarget, ChapterMeta, NoteMeta, Work } from "../../../shared/types";
 import { api } from "../../shared/api";
 import { useApi } from "../../shared/useApi";
 import { Alert } from "../../shared/ui/basic/alert";
@@ -11,11 +11,12 @@ import { Drawer } from "../../shared/ui/overlays/dialog";
 import { AppShell } from "../../shared/ui/layout/AppShell";
 import { workNav } from "../../app/workNav";
 import { AiPanel } from "./AiPanel";
-import { Manuscript, type EditorBridge, type Target } from "./Manuscript";
+import { Manuscript, targetKeyOf, type EditorBridge, type Target } from "./Manuscript";
 import { Outline } from "./Outline";
 import { PanelDock, type PanelKey } from "./PanelDock";
 import { useMedia } from "../../shared/useMedia";
 import { SelectionRewrite } from "./SelectionRewrite";
+import { useToast } from "../../shared/ui/overlays/toast";
 
 const STORE = "pildam.panels";
 const DEFAULTS: Record<PanelKey, boolean> = { outline: true, manuscript: true, ai: true };
@@ -26,12 +27,16 @@ function loadPanels(): Record<PanelKey, boolean> {
     return DEFAULTS;
   }
 }
-const isDoc = (v: string | null): v is DocName => v === "world" || v === "style" || v === "notes";
+// 예전 ?doc=world|notes 주소는 같은 이름의 폴더에 있는 첫 노트로 보낸다.
+const LEGACY_FOLDER: Record<string, string> = { world: "세계관", notes: "메모" };
 
 export function WorkspacePage() {
   const { workId = "" } = useParams();
   const [params, setParams] = useSearchParams();
   const { data: work, error, reload, setData: setWork } = useApi((s) => api.get<Work>(`/api/works/${workId}`, s), [workId]);
+  const { data: notes, setData: setNotes } = useApi((s) => api.get<NoteMeta[]>(`/api/works/${workId}/notes`, s), [workId]);
+  const { notify } = useToast();
+  const [version, setVersion] = useState(0); // 나누기처럼 서버가 본문을 바꾼 뒤 에디터를 다시 열 때 올린다
   const [panels, setPanels] = useState(loadPanels);
   const [mobilePanel, setMobilePanel] = useState<PanelKey>("manuscript");
   const [bridge, setBridge] = useState<EditorBridge | null>(null);
@@ -42,7 +47,16 @@ export function WorkspacePage() {
   const desktop = useMedia("(min-width: 1024px)");
 
   const docParam = params.get("doc");
-  const docName = isDoc(docParam) ? docParam : null;
+  const isStyle = docParam === "style";
+  const noteParam = params.get("note");
+  const legacy = docParam && docParam !== "style" ? docParam : null;
+  const note = noteParam ? notes?.find((n) => n.id === noteParam) ?? null : null;
+  useEffect(() => {
+    if (!legacy || !notes) return;
+    const hit = notes.find((n) => n.folder === LEGACY_FOLDER[legacy]) ?? notes[0];
+    setParams(hit ? { note: hit.id } : {}, { replace: true });
+  }, [legacy, notes, setParams]);
+  const waitingNotes = (!!noteParam || !!legacy) && !notes;
   const chIndex = work ? Math.max(0, work.chapters.findIndex((c) => c.id === params.get("ch"))) : -1;
   const chapter: ChapterMeta | null = work?.chapters[chIndex] ?? null;
   const previous = chIndex > 0 ? work!.chapters[chIndex - 1] : null;
@@ -66,8 +80,8 @@ export function WorkspacePage() {
     else if (!desktop) setDrawer(false);
     open("manuscript");
   };
-  const selectDoc = (name: DocName) => {
-    setParams({ doc: name });
+  const selectDoc = (p: Record<string, string>) => {
+    setParams(p);
     if (mobile) setMobilePanel("manuscript");
     else if (!desktop) setDrawer(false);
     open("manuscript");
@@ -82,6 +96,12 @@ export function WorkspacePage() {
     setParams({ ch: c.id });
     if (prev && !prev.hasSummary) setAskFor(c.id);
     if (mobile) setMobilePanel("manuscript");
+  }
+  async function splitNote(id: string) {
+    if (bridge?.key === `note:${id}`) await bridge.save(); // 안 저장된 글이 나누기 결과를 덮지 않게
+    setNotes(await api.post<NoteMeta[]>(`/api/works/${workId}/notes/${id}/split`));
+    setVersion((v) => v + 1);
+    notify({ title: "제목별로 나눴어요", tone: "success" });
   }
   async function renameChapter(title: string) {
     if (!work || !chapter) return;
@@ -98,22 +118,38 @@ export function WorkspacePage() {
       </AppShell>
     );
 
-  const target: Target | null = docName ? { kind: "doc", name: docName } : chapter ? { kind: "chapter", id: chapter.id, title: chapter.title } : null;
+  const target: Target | null = isStyle
+    ? { kind: "doc", name: "style" }
+    : note
+      ? {
+          kind: "note", id: note.id, title: note.title,
+          // 폴더에 혼자 있는 노트만 나누기를 권한다
+          onSplit: notes!.filter((n) => n.folder === note.folder).length === 1 ? () => splitNote(note.id).catch((e) => { notify({ title: e instanceof Error ? e.message : "나누지 못했어요.", tone: "error" }); }) : undefined,
+        }
+      : chapter && !legacy
+        ? { kind: "chapter", id: chapter.id, title: chapter.title }
+        : null;
+  const key = target ? targetKeyOf(target) : "";
+  const aiTarget: Exclude<AiTarget, { type: "graph" }> | null = !target ? null : target.kind === "chapter" ? { type: "chapter", chapterId: target.id } : target.kind === "note" ? { type: "note", noteId: target.id } : { type: "style" };
   const outline = work && (
     <Outline
       work={work}
-      chapterId={chapter?.id ?? null}
-      docName={docName}
+      notes={notes ?? []}
+      activeKey={key}
       onWork={setWork}
+      onNotes={setNotes}
       onSelectChapter={selectChapter}
-      onSelectDoc={selectDoc}
+      onSelectStyle={() => selectDoc({ doc: "style" })}
+      onSelectNote={(id) => selectDoc({ note: id })}
       onAdd={addChapter}
       onDeleted={(id) => chapter?.id === id && setParams({}, { replace: true })}
+      onNoteDeleted={(id) => note?.id === id && setParams({}, { replace: true })}
+      onSplit={splitNote}
     />
   );
   const inlineOutline = desktop || mobile;
   // 화면이 바뀌는 사이 이미 닫힌 에디터를 쓰면 화면 전체가 멈추므로, 지금 화의 에디터일 때만 쓴다.
-  const live = !docName && chapter && bridge?.chapterId === chapter.id ? bridge : null;
+  const live = target && bridge?.key === key ? bridge : null;
   const bothOff = !mobile && !panels.manuscript && !panels.ai;
 
   return (
@@ -131,8 +167,8 @@ export function WorkspacePage() {
         )}
 
         <main className={`min-h-0 min-w-0 flex-1 overflow-y-auto pb-28 ${showCenter("manuscript") ? "" : "hidden"}`}>
-          {!work ? null : target ? (
-            <Manuscript key={target.kind === "doc" ? target.name : target.id} workId={workId} target={target} onTitle={renameChapter} onReady={onReady} />
+          {!work || waitingNotes ? null : target ? (
+            <Manuscript key={`${key}:${version}`} workId={workId} target={target} onTitle={renameChapter} onReady={onReady} />
           ) : (
             <div className="grid place-items-center gap-4 py-24 text-center">
               <p className="m-0 text-muted">아직 화가 없어요.</p>
@@ -154,20 +190,23 @@ export function WorkspacePage() {
           {work && (
             <AiPanel
               work={work}
-              chapter={docName ? null : chapter}
-              previous={previous}
+              notes={notes ?? []}
+              target={aiTarget}
+              previous={target?.kind === "chapter" ? previous : null}
               bridge={live}
               onWork={setWork}
               onBusy={setAiBusy}
-              askSummary={!!chapter && askFor === chapter.id && !!previous && !previous.hasSummary}
+              askSummary={target?.kind === "chapter" && !!chapter && askFor === chapter.id && !!previous && !previous.hasSummary}
               onAskDone={() => setAskFor(null)}
+              onOpenNote={(id) => selectDoc({ note: id })}
+              onShowManuscript={() => { if (mobile) setMobilePanel("manuscript"); else open("manuscript"); }}
             />
           )}
         </aside>
       </div>
 
-      {live && work && chapter && visible("manuscript") && (
-        <SelectionRewrite key={chapter.id} editor={live.editor} workId={work.id} chapterId={chapter.id} modelId={work.modelId} disabled={aiBusy} save={live.save} />
+      {live && work && aiTarget && visible("manuscript") && (
+        <SelectionRewrite key={key} editor={live.editor} workId={work.id} target={aiTarget} modelId={work.modelId} disabled={aiBusy} save={live.save} />
       )}
       <PanelDock pressed={{ outline: visible("outline"), manuscript: visible("manuscript"), ai: visible("ai") }} onToggle={toggle} />
     </AppShell>

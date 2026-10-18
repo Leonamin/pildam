@@ -5,7 +5,8 @@ import Document from "@tiptap/extension-document";
 import Paragraph from "@tiptap/extension-paragraph";
 import Text from "@tiptap/extension-text";
 import { Placeholder, UndoRedo } from "@tiptap/extensions";
-import type { Chapter, DocName, SnapshotReason, TextDoc } from "../../../shared/types";
+import { ListTree } from "lucide-react";
+import type { Chapter, DocName, Note, SnapshotReason, TextDoc } from "../../../shared/types";
 import { api } from "../../shared/api";
 import { useApi } from "../../shared/useApi";
 import { Alert } from "../../shared/ui/basic/alert";
@@ -19,20 +20,25 @@ import "./editor.css";
 
 export type EditorBridge = {
   editor: Editor;
-  /** 이 에디터가 열고 있는 화 (설정 문서면 없음). 화면이 바뀌는 사이 낡은 에디터를 걸러내는 데 쓴다. */
-  chapterId?: string;
+  /** 이 에디터가 열고 있는 대상의 키(targetKeyOf). 화면이 바뀌는 사이 낡은 에디터를 걸러내는 데 쓴다. */
+  key: string;
   /** 지금 원고를 저장(snapshot이 있으면 덮어쓰기 전 본문을 스냅샷으로 남김). */
   save: (snapshot?: SnapshotReason) => Promise<unknown>;
   getText: () => string;
 };
 
 export const DOC_INFO: Record<DocName, { title: string; hint: string }> = {
-  world: { title: "세계관", hint: "예: 비가 자주 내리는 작은 항구 도시. 사람들은 서로를 이름 대신 별명으로 부른다." },
   style: { title: "문체", hint: "예: 1인칭, 담담한 말투, 짧은 문장" },
-  notes: { title: "메모", hint: "AI가 읽지 않는 나만의 메모를 적어 두세요." },
 };
+const NOTE_HINT = "여기에 설정을 적어 두세요. 예: 인물의 성격, 장소, 앞으로의 줄거리";
 
-export type Target = { kind: "chapter"; id: string; title: string } | { kind: "doc"; name: DocName };
+export type Target =
+  | { kind: "chapter"; id: string; title: string }
+  | { kind: "doc"; name: DocName }
+  | { kind: "note"; id: string; title: string; onSplit?: () => Promise<void> }; // onSplit: 폴더에 혼자 있는 긴 노트에서만
+
+export const targetKeyOf = (t: Target) => (t.kind === "chapter" ? `chapter:${t.id}` : t.kind === "note" ? `note:${t.id}` : t.name);
+const SPLIT_HINT_CHARS = 3000;
 
 const STATUS_TEXT: Record<SaveStatus, string> = { saved: "저장됨", dirty: "저장 전", saving: "저장 중…", error: "저장 실패" };
 
@@ -45,9 +51,11 @@ export function Manuscript({
   onReady: (bridge: EditorBridge | null) => void;
 }) {
   const url =
-    target.kind === "chapter" ? `/api/works/${workId}/chapters/${target.id}` : `/api/works/${workId}/docs/${target.name}`;
+    target.kind === "chapter" ? `/api/works/${workId}/chapters/${target.id}`
+    : target.kind === "note" ? `/api/works/${workId}/notes/${target.id}`
+    : `/api/works/${workId}/docs/${target.name}`;
   const { data, error, loading, reload } = useApi(async (s) => {
-    const r = await api.get<Chapter | TextDoc>(url, s);
+    const r = await api.get<Chapter | Note | TextDoc>(url, s);
     return { url, text: r.text, updatedAt: r.updatedAt };
   }, [url]);
 
@@ -86,19 +94,25 @@ function EditorView({
 }) {
   const doc = useDocSave(url, text, updatedAt);
   const info = target.kind === "doc" ? DOC_INFO[target.name] : null;
+  const [chars, setChars] = useState(text.length);
   const editor = useEditor({
-    extensions: [Document, Paragraph, Text, UndoRedo, AiMarks, Placeholder.configure({ placeholder: info ? info.hint : "여기에 이야기를 적거나, AI에게 장면을 부탁해 보세요." })],
+    extensions: [Document, Paragraph, Text, UndoRedo, AiMarks, Placeholder.configure({ placeholder: info ? info.hint : target.kind === "note" ? NOTE_HINT : "여기에 이야기를 적거나, AI에게 장면을 부탁해 보세요." })],
     content: textToDoc(text),
     editorProps: { attributes: { class: "manuscript-editor", "aria-label": "원고", spellcheck: "false" } },
-    onUpdate: ({ editor }) => doc.change(docToText(editor.state.doc)),
+    onUpdate: ({ editor }) => {
+      const t = docToText(editor.state.doc);
+      setChars(t.length);
+      doc.change(t);
+    },
     onBlur: () => void doc.save(),
   });
   const { save } = doc;
-  const chapterId = target.kind === "chapter" ? target.id : undefined;
+  const key = targetKeyOf(target);
   const bridge = useMemo(
-    () => editor && { editor, chapterId, save, getText: () => docToText(editor.state.doc) },
-    [editor, save, chapterId],
+    () => editor && { editor, key, save, getText: () => docToText(editor.state.doc) },
+    [editor, save, key],
   );
+  const [splitting, setSplitting] = useState(false);
   useEffect(() => {
     onReady(bridge);
     return () => onReady(null);
@@ -111,9 +125,10 @@ function EditorView({
           {target.kind === "chapter" ? (
             <TitleInput key={target.id} value={target.title} onCommit={onTitle} />
           ) : (
-            <h1 className="m-0 font-manuscript text-2xl font-bold">{info!.title}</h1>
+            <h1 className="m-0 font-manuscript text-2xl font-bold">{target.kind === "note" ? target.title : info!.title}</h1>
           )}
           <p className="m-0 mt-2 text-sm text-muted" aria-live="polite">
+            {target.kind === "note" && `${chars.toLocaleString()}자 · `}
             {STATUS_TEXT[doc.status]}
             {doc.status === "error" && !doc.conflict && (
               <>
@@ -124,6 +139,19 @@ function EditorView({
               </>
             )}
           </p>
+          {target.kind === "note" && target.onSplit && chars >= SPLIT_HINT_CHARS && (
+            <p className="m-0 mt-2 text-sm text-muted">
+              길어졌어요. 제목별로 나누면 AI가 필요한 부분만 읽어요.{" "}
+              <Button
+                variant="secondary"
+                className="min-h-9"
+                isLoading={splitting}
+                onClick={async () => { setSplitting(true); try { await target.onSplit!(); } finally { setSplitting(false); } }}
+              >
+                <ListTree size={14} aria-hidden="true" /> 제목별로 나누기
+              </Button>
+            </p>
+          )}
         </header>
         <EditorContent editor={editor} />
       </article>

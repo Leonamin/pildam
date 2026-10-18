@@ -1,21 +1,14 @@
 import { useState } from "react";
 import { Check, X } from "lucide-react";
-import type { Graph, GraphSuggestion } from "../../../shared/types";
+import type { ChapterMeta, Graph, GraphSuggestion } from "../../../shared/types";
 import { api } from "../../shared/api";
 import { Button } from "../../shared/ui/basic/button";
 import { useToast } from "../../shared/ui/overlays/toast";
-import { applySuggestions } from "../graph/suggestions";
+import { applySuggestions, describeSuggestion } from "../graph/suggestions";
 
 export type SummaryResult = { chapterLabel: string; summary: string; suggestions: GraphSuggestion[] };
 
-const KIND: Record<string, string> = { character: "인물", place: "장소", faction: "세력", item: "물건" };
-function describe(s: GraphSuggestion): string {
-  if (s.type === "add-node") return `새 ${KIND[s.node.kind] ?? "항목"} 「${s.node.name}」${s.node.description ? ` · ${s.node.description}` : ""}`;
-  if (s.type === "add-edge") return `${s.sourceName} ↔ ${s.targetName} · ${s.label}`;
-  return `${s.sourceName} ↔ ${s.targetName} · ${s.label} 끝남`;
-}
-
-export function SummaryCards({ workId, result, onClose }: { workId: string; result: SummaryResult; onClose: () => void }) {
+export function SummaryCards({ workId, chapters = [], result, onClose }: { workId: string; chapters?: ChapterMeta[]; result: SummaryResult; onClose: () => void }) {
   const { notify } = useToast();
   const [state, setState] = useState<("pending" | "applied" | "ignored")[]>(result.suggestions.map(() => "pending"));
   const [busy, setBusy] = useState(false);
@@ -50,9 +43,11 @@ export function SummaryCards({ workId, result, onClose }: { workId: string; resu
             {pending.length > 1 && <Button className="min-h-9" disabled={busy} onClick={() => void apply(pending)}>모두 반영</Button>}
           </div>
           <ul className="m-0 flex list-none flex-col gap-2 p-0">
-            {result.suggestions.map((s, i) => (
+            {result.suggestions.map((s, i) => {
+              const d = describeSuggestion(s, chapters);
+              return (
               <li key={i} className="flex items-center justify-between gap-2 rounded-lg border border-line bg-surface p-2 text-sm">
-                <span className="min-w-0">{describe(s)}</span>
+                <span className="min-w-0"><b>{d.head}</b> · {d.body}</span>
                 {state[i] === "pending" ? (
                   <span className="flex shrink-0 gap-1">
                     <Button className="min-h-9" disabled={busy} onClick={() => void apply([i])}>반영</Button>
@@ -65,7 +60,8 @@ export function SummaryCards({ workId, result, onClose }: { workId: string; resu
                   </span>
                 )}
               </li>
-            ))}
+              );
+            })}
           </ul>
         </>
       )}

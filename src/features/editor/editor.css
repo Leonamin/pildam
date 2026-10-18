@@ -25,3 +25,5 @@
   text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 4px;
   white-space: pre-wrap; border-radius: 3px;
 }
+.ai-add-block { margin: 0 0 0.9em; }
+.ai-add-block .ai-add { display: block; margin-top: 0.2em; }

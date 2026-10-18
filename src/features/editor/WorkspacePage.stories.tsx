@@ -17,7 +17,7 @@ const mobile = { viewport: { value: "mobile2", isRotated: false } };
 
 export const Chapter2: S = {};
 export const Chapter3NoSummaryOnPrevious: S = { parameters: at("/works/w1?ch=c3") };
-export const WorldDoc: S = { parameters: at("/works/w1?doc=world") };
+export const StyleDoc: S = { parameters: at("/works/w1?doc=style") };
 export const PanelsBothOff: S = { parameters: at("/works/w1?ch=c2", { storage: { "pildam.panels": JSON.stringify({ manuscript: false, ai: false }) } }) };
 export const OutlineOnly: S = { parameters: at("/works/w1?ch=c2", { storage: { "pildam.panels": JSON.stringify({ outline: true, manuscript: false, ai: false }) } }) };
 export const Mobile: S = { parameters: at("/works/w1?ch=c2"), globals: mobile };

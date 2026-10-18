@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { Editor } from "@tiptap/core";
 import { ArrowDownToLine, Check, ChevronLeft, ChevronRight, Eye, MessageSquarePlus, RefreshCw, X } from "lucide-react";
-import type { RewriteAction, RewriteResponse } from "../../../shared/types";
+import type { RewriteAction, RewriteRequest, RewriteResponse } from "../../../shared/types";
 import { api } from "../../shared/api";
 import { Button } from "../../shared/ui/basic/button";
 import { Spinner } from "../../shared/ui/basic/spinner";
@@ -25,11 +25,11 @@ const ACTIONS: { action: RewriteAction; label: string; icon: ReactNode }[] = [
 ];
 
 export function SelectionRewrite({
-  editor, workId, chapterId, modelId, disabled, save,
+  editor, workId, target, modelId, disabled, save,
 }: {
   editor: Editor;
   workId: string;
-  chapterId: string;
+  target: RewriteRequest["target"];
   modelId: string;
   disabled: boolean;
   save: (snapshot?: "ai-rewrite") => Promise<unknown>;
@@ -101,11 +101,8 @@ export function SelectionRewrite({
       const manuscript = docToText(doc);
       const start = pmToOffset(doc, r.from);
       const end = pmToOffset(doc, r.to);
-      const res = await api.post<RewriteResponse>(
-        `/api/works/${workId}/ai/rewrite`,
-        { chapterId, modelId, manuscript, selection: { text: manuscript.slice(start, end), start, end }, action: r.action, instruction: r.instruction },
-        c.signal,
-      );
+      const req: RewriteRequest = { target, modelId, manuscript, selection: { text: manuscript.slice(start, end), start, end }, action: r.action, instruction: r.instruction };
+      const res = await api.post<RewriteResponse>(`/api/works/${workId}/ai/rewrite`, req, c.signal);
       if (!res.candidates.length) throw new Error("후보를 받지 못했어요. 다시 해 주세요.");
       setPhase({ t: "diff", run: r, cands: res.candidates, i: 0 });
       showDiff(r, res.candidates[0]);
@@ -135,7 +132,7 @@ export function SelectionRewrite({
     setPhase(null);
     setSel(null);
     editor.commands.focus();
-    void save("ai-rewrite");
+    void save(target.type === "chapter" ? "ai-rewrite" : undefined); // 스냅샷은 화에만 있다
   }
 
   // 모바일 아래 시트가 비교 글을 가리면 글을 시트 위로 올린다.

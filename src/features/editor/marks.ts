@@ -3,6 +3,7 @@ import { Extension, type Editor } from "@tiptap/core";
 import { Fragment, Slice } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
+import type { Hunk } from "./docDiff";
 
 type Range = { from: number; to: number };
 type AiBlockState = { range: Range | null; show: boolean };
@@ -10,6 +11,7 @@ type DiffState = { range: Range; candidate: string; insert: boolean } | null;
 
 const blockKey = new PluginKey<AiBlockState>("aiBlock");
 const diffKey = new PluginKey<DiffState>("aiDiff");
+const docDiffKey = new PluginKey<Hunk[] | null>("aiDocDiff");
 
 export const AiMarks = Extension.create({
   name: "aiMarks",
@@ -65,6 +67,47 @@ export const AiMarks = Extension.create({
           },
         },
       }),
+      // 문체·노트 전체 고치기: 바뀐 문단은 취소선, 새 문단은 그 아래 초록 밑줄
+      new Plugin<Hunk[] | null>({
+        key: docDiffKey,
+        state: {
+          init: () => null,
+          apply: (tr, value) => (tr.getMeta(docDiffKey) !== undefined ? (tr.getMeta(docDiffKey) as Hunk[] | null) : value),
+        },
+        props: {
+          decorations(state) {
+            const hunks = docDiffKey.getState(state);
+            if (!hunks) return null;
+            const starts: number[] = []; // 문단 i의 앞 경계
+            state.doc.forEach((_p, off) => starts.push(off));
+            const bound = (i: number) => (i < starts.length ? starts[i] : state.doc.content.size);
+            const deco: Decoration[] = [];
+            hunks.forEach((h, k) => {
+              if (h.del) deco.push(Decoration.inline(bound(h.at) + 1, bound(h.at + h.del) - 1, { class: "ai-del" }));
+              const paras = h.add.filter(Boolean);
+              if (paras.length)
+                deco.push(
+                  Decoration.widget(
+                    bound(h.at + h.del),
+                    () => {
+                      const box = document.createElement("div");
+                      box.className = "ai-add-block";
+                      for (const t of paras) {
+                        const el = document.createElement("span");
+                        el.className = "ai-add";
+                        el.textContent = t;
+                        box.append(el);
+                      }
+                      return box;
+                    },
+                    { side: -1, key: `${k}:${paras.join("\n")}` },
+                  ),
+                );
+            });
+            return DecorationSet.create(state.doc, deco);
+          },
+        },
+      }),
     ];
   },
 });
@@ -78,6 +121,9 @@ export const fadeAiBlock = (editor: Editor) => {
 };
 export const setDiff = (editor: Editor, diff: DiffState) =>
   editor.view.dispatch(editor.state.tr.setMeta(diffKey, diff).setMeta("addToHistory", false));
+
+export const setDocDiff = (editor: Editor, hunks: Hunk[] | null) =>
+  editor.view.dispatch(editor.state.tr.setMeta(docDiffKey, hunks).setMeta("addToHistory", false));
 
 /** [from,to]를 text(문단은 빈 줄 기준)로 바꾼다. 새 글이 차지하는 끝 위치를 돌려준다. */
 export function replaceWithText(editor: Editor, from: number, to: number, text: string, aiBlock = false): number {
