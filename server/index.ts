@@ -25,6 +25,7 @@ app.use("/api/*", bodyLimit({
 app.use("/api/*", async (c, next) => {
   if (c.req.path !== "/api/login" && !sessionUser(c)) fail(401, "unauthorized", "로그인이 필요해요.");
   await next();
+  c.header("Cache-Control", "no-store"); // 원고가 브라우저 캐시에서 옛 내용으로 뜨지 않게
 });
 app.route("/api", auth);
 app.route("/api", ai);

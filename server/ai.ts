@@ -276,6 +276,7 @@ const ACTIONS: Record<RewriteAction, string> = {
   describe: "[선택한 부분]에 묘사를 더해 풍성하게 고쳐 쓰세요. 각 후보는 [선택한 부분]을 대체할 글입니다.",
   custom: "",
 };
+const ACTION_LABEL: Record<RewriteAction, string> = { rewrite: "다시 쓰기", continue: "이어 쓰기", describe: "묘사 더하기", custom: "직접 요청" };
 ai.post("/works/:workId/ai/rewrite", async (c) => {
   const { workId } = c.req.param();
   const b = await readBody(c.req.raw);
@@ -287,14 +288,14 @@ ai.post("/works/:workId/ai/rewrite", async (c) => {
   const start = Number(sel.start), end = Number(sel.end);
   if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end < start) fail(400, "bad_request", "요청 내용이 올바르지 않아요.");
   const action = String(b.action) as RewriteAction;
-  if (!(action in ACTIONS)) fail(400, "bad_request", "요청 내용이 올바르지 않아요.");
+  if (!Object.hasOwn(ACTIONS, action)) fail(400, "bad_request", "요청 내용이 올바르지 않아요.");
   const custom = action === "custom" ? str(b.instruction, 4000, 1) : "";
 
   const task = action === "custom" ? `[선택한 부분]에 대해 다음 요청을 수행하세요: ${custom}\n각 후보는 [선택한 부분]을 대체할 글입니다.` : ACTIONS[action];
   const prompt = `${await context(workId, chapterId, manuscript)}[선택한 부분 앞뒤]\n${manuscript.slice(Math.max(0, start - 600), start)}【선택】${manuscript.slice(end, end + 600)}\n\n[선택한 부분]\n${text}\n\n[요청]\n${task}\n서로 다르게 쓴 후보 정확히 3개를 문자열 JSON 배열로 출력하세요. 예: ["후보1","후보2","후보3"]\n각 후보는 소설 본문만 담고, [문체]를 따르세요. ${JSON_RULES}`;
   const out = await run(model, "rewrite", prompt, c.req.raw.signal);
   const result = candidates(out);
-  await log(workId, chapterId, "rewrite", custom || action, model.id, result[0]);
+  await log(workId, chapterId, "rewrite", custom || ACTION_LABEL[action], model.id, result[0]);
   return c.json<RewriteResponse>({ candidates: result });
 });
 

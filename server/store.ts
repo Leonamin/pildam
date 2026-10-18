@@ -213,7 +213,7 @@ export const putChapter = (workId: string, chapterId: string, text: string, base
     const c = findChapter(w, chapterId);
     if (c.updatedAt !== base) fail(409, "conflict", "다른 곳에서 먼저 저장된 내용이 있어요.");
     const old = await readText(chapterPath(workId, c.id));
-    if (snapshot && old) await snap(workId, c.id, old, snapshot);
+    if (snapshot && old !== null) await snap(workId, c.id, old, snapshot);
     await writeAtomic(chapterPath(workId, c.id), text);
     return { updatedAt: (c.updatedAt = now()) };
   });
