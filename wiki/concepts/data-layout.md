@@ -53,3 +53,18 @@ okf_version: "0.1"
 - 모든 쓰기는 임시 파일에 쓴 뒤 이름을 바꾸는 원자적 쓰기이고, 작품 단위로 순서대로 처리한다.
 - `models.json`이 없으면 기본값을 만든다: agy Gemini 4 Argon high("꼼꼼한 작가")·medium, Gemini 3.8 Flash medium("빠른 작가"), claude-opus-5-5, codex 기본 모델.
 - ID는 `^[a-z0-9-]{1,40}$`만 허용해 경로 조작을 막는다.
+
+## 설정 노트 (2026-10-18 추가)
+
+```
+works/<작품ID>/
+  notes.json            # 노트 목록·순서 (id, title, folder, pinned, recap, size, updatedAt)
+  notes/<노트ID>.txt    # 노트 본문
+  style.txt             # 문체 (세계관·메모 문서는 노트로 이관됨)
+  world.txt.migrated    # 이관 전 원본 보존
+  notes.txt.migrated
+  chat/<화ID>.jsonl · chat/style.jsonl · chat/graph.jsonl · chat/note-<노트ID>.jsonl   # 대상별 지시 기록
+```
+
+- 폴더는 노트의 `folder` 문자열일 뿐이고 폴더 안에 폴더는 없다. 결정 배경: [ADR 0011](../decisions/0011-setting-notes-and-server-side-note-selection.md)
+- 노트 제목·폴더·고정을 바꿔도 노트의 `updatedAt`은 그대로라서 본문 저장 충돌(409)을 일으키지 않는다.

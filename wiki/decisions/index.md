@@ -18,3 +18,4 @@ okf_version: "0.1"
 - [0008. 선택 수정은 인라인 비교, 대필은 바로 삽입](0008-inline-diff-for-selection-direct-insert-for-ghostwriting.md)
 - [0009. 프론트엔드는 Tailwind v4 + Goodcase UI를 cascade layer로 함께 쓴다](0009-tailwind-with-goodcase-ui-layers.md)
 - [0010. AI CLI는 도구 없이·격리해서 실행한다](0010-isolated-cli-execution.md)
+- [0011. 설정은 노트 트리로, 본문은 서버가 골라 AI에 보낸다](0011-setting-notes-and-server-side-note-selection.md)
