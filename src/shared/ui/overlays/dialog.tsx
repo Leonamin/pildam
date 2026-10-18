@@ -79,6 +79,13 @@ function Modal({
             if (initialFocusRef?.current) {
               event.preventDefault();
               initialFocusRef.current.focus();
+            } else {
+              // 입력칸이 있으면 닫기 버튼 대신 거기에 포커스를 둔다(메뉴에서 열 때 React autoFocus가 밀린다).
+              const input = (event.currentTarget as HTMLElement).querySelector<HTMLElement>("input, textarea");
+              if (input) {
+                event.preventDefault();
+                input.focus();
+              }
             }
           }}
           onEscapeKeyDown={(event) => {

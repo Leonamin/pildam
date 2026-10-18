@@ -22,6 +22,28 @@ function savePos(workId: string, cy: cytoscape.Core) {
   }
 }
 
+// 노드가 하나뿐이면 fit이 최대 배율까지 키워 버리므로 적당한 크기에서 멈춘다.
+const fit = (cy: cytoscape.Core) => {
+  cy.fit(undefined, 40);
+  if (cy.zoom() > 1.2) {
+    cy.zoom(1.2);
+    cy.center();
+  }
+};
+
+// 새 노드 자리: 기존 노드들의 중심 둘레에서 겹치지 않는 첫 곳 (cose는 잠긴 노드 위에 겹쳐 놓는다).
+type XY = { x: number; y: number };
+function spot(taken: XY[]): XY {
+  const c = { x: taken.reduce((a, p) => a + p.x, 0) / taken.length, y: taken.reduce((a, p) => a + p.y, 0) / taken.length };
+  for (let r = 1; ; r++) {
+    for (let a = 0; a < 8 * r; a++) {
+      const t = (a / (8 * r)) * 2 * Math.PI;
+      const p = { x: c.x + Math.cos(t) * r * 180, y: c.y + Math.sin(t) * r * 100 };
+      if (taken.every((q) => Math.abs(q.x - p.x) > 170 || Math.abs(q.y - p.y) > 70)) return p;
+    }
+  }
+}
+
 const FONT = "Pretendard, system-ui, sans-serif";
 
 export function GraphCanvas({
@@ -107,16 +129,24 @@ export function GraphCanvas({
         .map((e) => ({ group: "edges" as const, data: { id: e.id, source: e.source, target: e.target, label: e.label }, classes: highlight.has(e.id) ? "hl" : "" })),
     ]);
     if (fresh.length > 0) {
-      const first = fresh.length === nodes.length;
-      cy.nodes().filter((n) => !fresh.includes(n.id())).lock();
-      cy.layout({ name: "cose", animate: false, fit: first, padding: 40, nodeRepulsion: () => 9000, idealEdgeLength: () => 100 } as cytoscape.LayoutOptions)
-        .one("layoutstop", () => {
-          cy.nodes().unlock();
-          savePos(workId, cy);
-        })
-        .run();
+      if (fresh.length === nodes.length) {
+        cy.layout({ name: "cose", animate: false, fit: false, padding: 40, nodeRepulsion: () => 9000, idealEdgeLength: () => 100 } as cytoscape.LayoutOptions)
+          .one("layoutstop", () => {
+            fit(cy);
+            savePos(workId, cy);
+          })
+          .run();
+      } else {
+        const taken = nodes.filter((n) => known[n.id]).map((n) => known[n.id]);
+        for (const id of fresh) {
+          const p = spot(taken);
+          taken.push(p);
+          cy.getElementById(id).position(p);
+        }
+        savePos(workId, cy);
+      }
     }
-    if (fresh.length === 0 && !didFit.current && nodes.length > 0) cy.fit(undefined, 40);
+    if (fresh.length === 0 && !didFit.current && nodes.length > 0) fit(cy);
     if (nodes.length > 0) didFit.current = true;
     if (selectedId) cy.getElementById(selectedId).select();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -130,7 +160,7 @@ export function GraphCanvas({
   }, [selectedId, nodes]);
 
   useEffect(() => {
-    if (fitTick > 0) cyRef.current?.fit(undefined, 40);
+    if (fitTick > 0 && cyRef.current) fit(cyRef.current);
   }, [fitTick]);
 
   return (

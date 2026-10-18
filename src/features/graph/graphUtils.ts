@@ -6,7 +6,6 @@ export const KINDS: { value: NodeKind; label: string; fill: string; border: stri
   { value: "faction", label: "세력", fill: "#FFCCB8", border: "#C98A6E" },
   { value: "item", label: "사물", fill: "#FFFAD3", border: "#C2B568" },
 ];
-export const kindLabel = (k: NodeKind) => KINDS.find((x) => x.value === k)?.label ?? "인물";
 
 export const START = "__start";
 export const END = "__end";

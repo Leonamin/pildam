@@ -69,7 +69,7 @@ function Flow() {
   }
   async function addFirstChapter(id: string) {
     if (done.current.has("chapter")) return;
-    await api.post(`/api/works/${id}/chapters`, { title: "1화" });
+    await api.post(`/api/works/${id}/chapters`, { title: "제목 없음" });
     done.current.add("chapter");
   }
   async function skip() {
