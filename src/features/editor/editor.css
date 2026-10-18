@@ -1,0 +1,27 @@
+.manuscript-editor {
+  min-height: 55vh;
+  outline: none;
+  white-space: pre-wrap;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  font-family: var(--font-manuscript);
+  font-size: 18px;
+  line-height: 1.9;
+  color: var(--gc-text);
+  caret-color: var(--gc-accent);
+}
+.manuscript-editor p { margin: 0 0 0.9em; }
+.manuscript-editor p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left; height: 0; pointer-events: none;
+  color: var(--gc-text-muted);
+}
+.manuscript-editor ::selection { background: var(--gc-accent-soft); }
+.ai-block { background: var(--pd-diff-add-bg); border-radius: 3px; transition: background-color 1.2s; }
+.ai-block-faded { background: transparent; }
+.ai-del { color: var(--pd-diff-del); text-decoration: line-through; text-decoration-thickness: 2px; }
+.ai-add {
+  color: var(--pd-diff-add); background: var(--pd-diff-add-bg);
+  text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 4px;
+  white-space: pre-wrap; border-radius: 3px;
+}
