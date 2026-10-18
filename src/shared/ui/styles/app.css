@@ -1,0 +1,73 @@
+@import "tailwindcss";
+@import "./tokens.css" layer(base);
+@import "./theme.css" layer(base);
+@import "./basic.css" layer(components);
+@import "./overlays.css" layer(components);
+@import "./tabs.css" layer(components);
+@import "./toast.css" layer(components);
+
+/* Tailwind 유틸리티 이름: bg-bg bg-surface text-ink text-muted bg-accent border-line … */
+@theme {
+  --font-manuscript: "RIDIBatang", "Noto Serif KR", "Nanum Myeongjo", serif;
+}
+@theme inline {
+  --color-bg: var(--gc-bg);
+  --color-surface: var(--gc-surface);
+  --color-surface-subtle: var(--gc-surface-subtle);
+  --color-ink: var(--gc-text);
+  --color-muted: var(--gc-text-muted);
+  --color-accent: var(--gc-accent);
+  --color-accent-hover: var(--gc-accent-hover);
+  --color-accent-soft: var(--gc-accent-soft);
+  --color-on-accent: var(--gc-on-accent);
+  --color-line: var(--gc-border);
+  --color-danger: var(--gc-danger);
+  --color-success: var(--gc-success);
+  --color-cream: var(--pd-cream);
+  --color-peach: var(--pd-peach);
+  --color-apricot: var(--pd-apricot);
+  --color-pink: var(--pd-pink);
+  --color-paper: var(--pd-paper);
+  --color-diff-del: var(--pd-diff-del);
+  --color-diff-add: var(--pd-diff-add);
+  --color-diff-add-bg: var(--pd-diff-add-bg);
+  --font-sans: var(--gc-font-sans);
+}
+
+/* kit global.css 중 필요한 것만 */
+html {
+  font-family: var(--gc-font-sans);
+  color: var(--gc-text);
+  background: var(--gc-bg);
+  font-size: var(--gc-text-base);
+}
+body {
+  margin: 0;
+  min-width: 0;
+  overflow-x: hidden;
+}
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+:focus-visible {
+  outline: 3px solid var(--gc-focus);
+  outline-offset: 3px;
+}
+h1, h2, h3, p { overflow-wrap: anywhere; }
+.gc-sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+/* composed.css 중 ConfirmDialog가 쓰는 것 */
+.gc-actions {
+  display: flex; align-items: center; justify-content: flex-end;
+  gap: var(--gc-space-2); flex-wrap: wrap;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+/* 아이콘+글자 버튼 */
+.gc-button-content { display: inline-flex; align-items: center; justify-content: center; gap: var(--gc-space-2); }

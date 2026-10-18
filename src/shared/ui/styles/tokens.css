@@ -1,0 +1,121 @@
+/* Goodcase reference theme: neutral ink, warm paper, blue accent */
+:root {
+  color-scheme: light;
+  --gc-font-sans:
+    "Pretendard Variable", "Pretendard", -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  --gc-font-mono: "SFMono-Regular", Consolas, monospace;
+  --gc-bg: #f6f5f2;
+  --gc-surface: #ffffff;
+  --gc-surface-subtle: #f2f3f5;
+  --gc-text: #20242c;
+  --gc-text-muted: #656c78;
+  --gc-border: #dce0e6;
+  --gc-control-border: #8b929f;
+  --gc-interactive-hover: #20242c0a;
+  --gc-progress-track: #e5e8ed;
+  --gc-on-accent: #ffffff;
+  --gc-accent: #245bd8;
+  --gc-accent-hover: #1c48ae;
+  --gc-accent-soft: #eef3ff;
+  --gc-danger: #b52a36;
+  --gc-danger-soft: #fff1f2;
+  --gc-success: #247149;
+  --gc-success-soft: #edf8f1;
+  --gc-warning: #8a5a12;
+  --gc-warning-soft: #fff8e8;
+  --gc-overlay: #17203366;
+  --gc-focus: #245bd8;
+  --gc-focus-clearance: 6px;
+  --gc-toast-control-size: 24px;
+  --gc-toast-title-line-height: 24px;
+  --gc-toast-enter-duration: 180ms;
+  --gc-toast-exit-duration: 180ms;
+  --gc-radius-sm: 6px;
+  --gc-radius: 10px;
+  --gc-radius-lg: 16px;
+  --gc-shadow: 0 12px 40px #1720331f;
+  --gc-space-1: 4px;
+  --gc-space-2: 8px;
+  --gc-space-3: 12px;
+  --gc-space-4: 16px;
+  --gc-space-6: 24px;
+  --gc-space-8: 32px;
+  --gc-control-height: 40px;
+  --gc-text-sm: 13px;
+  --gc-text-base: 15px;
+  --gc-text-lg: 20px;
+  --gc-text-title: 34px;
+  --gc-duration: 140ms;
+  --gc-press-duration: 80ms;
+  --gc-press-scale: 0.96;
+  --gc-press-easing: ease-out;
+  --gc-tab-icon-size: 20px;
+  --gc-tab-bottom-icon-size: 26px;
+  --gc-tab-transition: 300ms;
+  --gc-tab-easing: cubic-bezier(0.22, 0.68, 0.3, 1);
+  --gc-tab-panel-offset: 6px;
+  --gc-tab-segment-shadow: 0 1px 2px
+    color-mix(in srgb, var(--gc-overlay) 30%, transparent);
+  --gc-tab-dot-size: 6px;
+  --gc-tab-count-size: 16px;
+  --gc-tab-count-font-size: 10px;
+  --gc-tab-badge-ring: 2px;
+  --gc-stepper-value-width: 64px;
+  --gc-accordion-duration: 240ms;
+  --gc-accordion-easing: cubic-bezier(0.22, 0.68, 0.3, 1);
+  --gc-slider-track-height: 6px;
+  --gc-slider-thumb-size: 20px;
+  --gc-spinner-size-small: 16px;
+  --gc-spinner-size-medium: 32px;
+  --gc-spinner-size-large: 48px;
+  --gc-spinner-stroke: 3;
+  --gc-spinner-track-opacity: 0.16;
+  --gc-spinner-ring-duration: 800ms;
+  --gc-spinner-orbit-duration-1: 1200ms;
+  --gc-spinner-orbit-duration-2: 1600ms;
+  --gc-spinner-orbit-duration-3: 2100ms;
+  --gc-spinner-orbit-duration-4: 2700ms;
+}
+[data-theme="forest"] {
+  --gc-accent: #26714e;
+  --gc-accent-hover: #1c543a;
+  --gc-accent-soft: #edf8f1;
+  --gc-focus: #26714e;
+}
+[data-density="compact"] {
+  --gc-control-height: 34px;
+  --gc-space-4: 12px;
+  --gc-space-6: 20px;
+}
+[data-color-mode="dark"] {
+  color-scheme: dark;
+  --gc-bg: #15181e;
+  --gc-surface: #20252e;
+  --gc-surface-subtle: #2b313c;
+  --gc-text: #f0f2f6;
+  --gc-text-muted: #adb5c3;
+  --gc-border: #414958;
+  --gc-control-border: #919aaa;
+  --gc-interactive-hover: #ffffff12;
+  --gc-progress-track: #384150;
+  --gc-accent: #9ab7ff;
+  --gc-accent-hover: #bdd0ff;
+  --gc-accent-soft: #293954;
+  --gc-on-accent: #101927;
+  --gc-focus: #9ab7ff;
+  --gc-success: #83d4ac;
+  --gc-success-soft: #20392d;
+  --gc-warning: #f3cf7f;
+  --gc-warning-soft: #3c3320;
+  --gc-danger: #f3a5ad;
+  --gc-danger-soft: #422930;
+  --gc-overlay: #080b12aa;
+  --gc-shadow: 0 12px 40px #00000055;
+}
+[data-color-mode="dark"][data-theme="forest"] {
+  --gc-accent: #93d4ae;
+  --gc-accent-hover: #b1e5c6;
+  --gc-accent-soft: #243c30;
+  --gc-focus: #93d4ae;
+}

@@ -1,0 +1,96 @@
+/* 필담 theme: ColorHunt #FFFAD3 #FFDBB0 #FFCCB8 #FFB1B1 → Goodcase --gc-* tokens.
+   tokens.css 뒤에 불러와 값을 덮어쓴다. */
+:root {
+  --pd-cream: #fffad3;
+  --pd-peach: #ffdbb0;
+  --pd-apricot: #ffccb8;
+  --pd-pink: #ffb1b1;
+  --pd-diff-del: #b52a36;
+  --pd-diff-add: #1f6b43;
+  --pd-diff-add-bg: #e3f4e6;
+  --pd-paper: #ffffff; /* 원고 종이 */
+
+  --gc-bg: #fffdf0;
+  --gc-surface: #ffffff;
+  --gc-surface-subtle: #fffad3;
+  --gc-text: #3a2f2c;
+  --gc-text-muted: #6b5a53;
+  --gc-border: #ebcfae;
+  --gc-control-border: #9a8575;
+  --gc-interactive-hover: #3a2f2c0d;
+  --gc-progress-track: #ffdbb0;
+  --gc-on-accent: #ffffff;
+  --gc-accent: #b4424f;
+  --gc-accent-hover: #963543;
+  --gc-accent-soft: #ffccb8;
+  --gc-focus: #b4424f;
+  --gc-danger: #b52a36;
+  --gc-danger-soft: #fff0f0;
+  --gc-success: #247149;
+  --gc-success-soft: #edf8f1;
+  --gc-warning: #8a5a12;
+  --gc-warning-soft: #fff4d6;
+  --gc-overlay: #3a2f2c66;
+  --gc-shadow: 0 12px 40px #6b3a2a24;
+  --gc-control-height: 44px; /* 터치 대상 44px */
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-color-mode="light"]) {
+    color-scheme: dark;
+    --pd-diff-del: #f3a5ad;
+    --pd-diff-add: #8fd9a8;
+    --pd-diff-add-bg: #1f3a2a;
+    --pd-paper: #2a2321;
+    --gc-bg: #1f1a18;
+    --gc-surface: #2a2321;
+    --gc-surface-subtle: #352c29;
+    --gc-text: #f4ebe4;
+    --gc-text-muted: #bbaaa1;
+    --gc-border: #4a3d38;
+    --gc-control-border: #a08f85;
+    --gc-interactive-hover: #ffffff14;
+    --gc-progress-track: #4a3d38;
+    --gc-on-accent: #2b1114;
+    --gc-accent: #ffb1b1;
+    --gc-accent-hover: #ffccb8;
+    --gc-accent-soft: #4a2f2e;
+    --gc-focus: #ffb1b1;
+    --gc-danger: #f3a5ad;
+    --gc-danger-soft: #422930;
+    --gc-success: #83d4ac;
+    --gc-success-soft: #20392d;
+    --gc-warning: #f3cf7f;
+    --gc-warning-soft: #3c3320;
+    --gc-overlay: #080605aa;
+    --gc-shadow: 0 12px 40px #00000066;
+  }
+}
+[data-color-mode="dark"] {
+  color-scheme: dark;
+  --pd-diff-del: #f3a5ad;
+  --pd-diff-add: #8fd9a8;
+  --pd-diff-add-bg: #1f3a2a;
+  --pd-paper: #2a2321;
+  --gc-bg: #1f1a18;
+  --gc-surface: #2a2321;
+  --gc-surface-subtle: #352c29;
+  --gc-text: #f4ebe4;
+  --gc-text-muted: #bbaaa1;
+  --gc-border: #4a3d38;
+  --gc-control-border: #a08f85;
+  --gc-interactive-hover: #ffffff14;
+  --gc-progress-track: #4a3d38;
+  --gc-on-accent: #2b1114;
+  --gc-accent: #ffb1b1;
+  --gc-accent-hover: #ffccb8;
+  --gc-accent-soft: #4a2f2e;
+  --gc-focus: #ffb1b1;
+  --gc-danger: #f3a5ad;
+  --gc-danger-soft: #422930;
+  --gc-success: #83d4ac;
+  --gc-success-soft: #20392d;
+  --gc-warning: #f3cf7f;
+  --gc-warning-soft: #3c3320;
+  --gc-overlay: #080605aa;
+  --gc-shadow: 0 12px 40px #00000066;
+}
