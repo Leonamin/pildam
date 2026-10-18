@@ -46,5 +46,15 @@ test("real-ish samples", () => {
   const w = splitNote(REAL_WORLD);
   assert.equal(w?.length, 4);
   const n = splitNote(REAL_NOTES);
-  assert.equal(n?.length, 4);
+  assert.deepEqual(n?.map((c) => c.title), ["", "전개 (승) : 일상의 균열과 첫 번째 공조", "절정 (전) : 가문의 비밀 폭로와 거대한 경계 붕괴", "결말 (결) : 함께 지키는 세계, 그리고 되찾은 일상", "등장인물 원본"]); // 구획 띠도 경계
+});
+
+test("short list items inside a section fold into it", () => {
+  const long = (t: string) => `${t}\n\n· ${"충분히 긴 설명 줄이다. ".repeat(6)}`;
+  const c = splitNote(`${long("1. 하나")}\n\n${long("2. 둘")}\n\n3. 차별점\n\n1. 짧은 항목\n\n2. 짧은 항목`)!;
+  assert.deepEqual(c.map((x) => x.title), ["하나", "둘"]);
+  assert.ok(c[1].text.includes("2. 짧은 항목"));
+  const r = splitNote(`${long("1. 하나")}\n\n${long("2. 둘")}\n\n${long("1. 다시 시작한 목록")}`)!; // 번호가 이어지지 않으면 제목이 아니다
+  assert.equal(r.length, 2);
+  assert.equal(recap("[2] 서쪽 - 백호"), "서쪽 - 백호");
 });

@@ -9,6 +9,7 @@ import type {
   AiTarget, ChatEntry, EditDocResponse, EditGraphResponse, Graph, GraphSuggestion, ModelOption, NodeKind,
   OnboardResponse, RewriteAction, RewriteResponse, StreamEvent, SummarizeResponse, Work,
 } from "../shared/types.ts";
+import { extractJson } from "./json.ts";
 import { indexSection, selectNotes } from "./select.ts";
 import {
   ApiErr, appendChat, checkId, fail, findModel, getChapter, getDoc, getGraph, getNote, getWork, KINDS, notesWithText,
@@ -85,8 +86,12 @@ async function runCli(m: ModelOption, prompt: string, signal: AbortSignal, onDel
       if (signal.aborted) return reject(new ApiErr(499, "ai_failed", "요청이 취소됐어요."));
       const child = spawn(cmd, args, { cwd, stdio: ["pipe", "pipe", "pipe"] });
       let out = "", errText = "", stderr = "", buf = "", final = "", timedOut = false;
-      const timer = setTimeout(() => ((timedOut = true), child.kill()), TIMEOUT_MS);
-      const kill = () => child.kill();
+      // agy는 SIGTERM을 무시하고 버틴 적이 있어, 3초 뒤에도 살아 있으면 SIGKILL로 끝낸다.
+      const kill = () => {
+        child.kill();
+        setTimeout(() => child.exitCode === null && child.signalCode === null && child.kill("SIGKILL"), 3000).unref();
+      };
+      const timer = setTimeout(() => ((timedOut = true), kill()), TIMEOUT_MS);
       signal.addEventListener("abort", kill, { once: true });
 
       const handle = (line: string) => {
@@ -95,7 +100,10 @@ async function runCli(m: ModelOption, prompt: string, signal: AbortSignal, onDel
         const p = parseLine(m.provider, o);
         if (p.text) { out += p.text; onDelta(p.text); }
         if (p.err) errText = p.err;
-        if (p.final) final = p.final;
+        if (p.final) {
+          final = p.final;
+          setTimeout(kill, 2000).unref(); // 최종 답을 보낸 뒤에도 agy가 안 끝나는 경우가 있어(긴 답에서 재현), 잠깐 기다렸다 정리한다
+        }
       };
       child.stdout.setEncoding("utf8").on("data", (d: string) => {
         const lines = (buf + d).split("\n");
@@ -112,7 +120,7 @@ async function runCli(m: ModelOption, prompt: string, signal: AbortSignal, onDel
         if (buf) handle(buf);
         if (signal.aborted) return reject(new ApiErr(499, "ai_failed", "요청이 취소됐어요."));
         if (timedOut) return reject(new ApiErr(504, "ai_failed", "AI가 너무 오래 걸려서 멈췄어요. 다시 시도해 주세요."));
-        if (errText || code !== 0) {
+        if (errText || (code !== 0 && !final)) {
           console.error(`[ai] ${m.id} 실패 code=${code}\n${errText}\n${stderr}`);
           return reject(classify(`${errText}\n${stderr}`));
         }
@@ -244,9 +252,19 @@ const SUGGEST_MORE = `
 // ── 결과 해석 ──
 const bad = () => new ApiErr(502, "ai_failed", "AI의 답을 이해하지 못했어요. 다시 시도해 주세요.");
 function parseJson(text: string, open: "[" | "{"): unknown {
-  const t = text.replace(/```(?:json)?/gi, "");
-  const s = t.indexOf(open), e = t.lastIndexOf(open === "[" ? "]" : "}");
-  try { return JSON.parse(t.slice(s, e + 1)); } catch { throw bad(); }
+  const v = extractJson(text, open);
+  if (v === undefined) throw bad();
+  return v;
+}
+// JSON을 기대하는 호출. 못 읽으면 이전 답을 보여 주며 한 번만 다시 시킨다.
+async function runJson(model: ModelOption, kind: Kind, prompt: string, signal: AbortSignal, mock?: string): Promise<{ j: any; out: string }> {
+  let out = await run(model, kind, prompt, signal, undefined, mock);
+  let j = extractJson(out, "{");
+  if (j === undefined && model.provider !== "mock") {
+    out = await run(model, kind, `아래는 당신이 방금 한 답인데 JSON으로 읽을 수 없었습니다. 같은 내용을 유효한 JSON 객체 하나로만 다시 출력하세요. 문자열 안의 큰따옴표는 \\"로, 줄바꿈은 \\n으로 쓰세요. 설명이나 마크다운은 쓰지 마세요.\n\n[이전 답]\n${out}`, signal);
+    j = extractJson(out, "{");
+  }
+  return { j, out };
 }
 function candidates(text: string): string[] {
   let list: unknown;
@@ -394,9 +412,11 @@ ai.post("/works/:workId/ai/edit-doc", async (c) => {
   const prompt = `${ctx}[요청]\n${instruction}\n\n위 [${target.type === "style" ? "고칠 문체 지침" : "고칠 설정 노트"}]을 요청대로 고쳐서 전체 새 본문을 만드세요. ${rules}
 출력 형식: {"text":"고친 전체 본문"}
 ${JSON_RULES}`;
-  const out = await run(model, "edit-doc", prompt, c.req.raw.signal, undefined, JSON.stringify({ text: `${text.trimEnd()}\n\n(연습용 AI가 덧붙인 문단)` }));
-  let result: string | null = null;
-  try { const j = parseJson(out, "{") as { text?: unknown }; if (typeof j?.text === "string") result = j.text; } catch { /* 아래에서 원문 그대로 쓴다 */ }
+  const paras = text.trimEnd().split(/\n\n/);
+  if (paras.length > 1) paras[0] = `${paras[0]} (연습용 AI가 고침)`; // 연습용 AI는 첫 문단도 바꿔서 삭제·변경 표시가 보이게 한다
+  const { j, out } = await runJson(model, "edit-doc", prompt, c.req.raw.signal, JSON.stringify({ text: `${paras.join("\n\n")}\n\n(연습용 AI가 덧붙인 문단)` }));
+  let result: string | null = typeof j?.text === "string" ? j.text : null;
+  if (result === null && /^\s*(```|\{)/.test(out)) throw bad(); // JSON처럼 보이는데 못 읽었으면 본문으로 쓰지 않는다
   result ??= out.replace(/^\s*```[a-z]*\n?/i, "").replace(/\n?```\s*$/, "");
   if (!result.trim()) throw bad();
   await log(workId, target, "edit", instruction, model.id, result, used);
@@ -439,7 +459,8 @@ ${JSON_RULES}`;
       ...(first ? [{ type: "update-node", name: first.name, node: { description: `${first.description} (연습용 AI가 덧붙임)`.trim() } }] : []),
     ],
   });
-  const j = parseJson(await run(model, "edit-graph", prompt, c.req.raw.signal, undefined, mock), "{") as { reply?: unknown; suggestions?: unknown };
+  const { j } = await runJson(model, "edit-graph", prompt, c.req.raw.signal, mock) as { j: { reply?: unknown; suggestions?: unknown } | undefined };
+  if (!j) throw bad();
   const byNo = (n: unknown) => (Number.isInteger(n) && (n as number) >= 1 ? work.chapters[(n as number) - 1]?.id ?? null : null);
   const reply = typeof j?.reply === "string" ? j.reply.trim() : "";
   if (!reply && !Array.isArray(j?.suggestions)) throw bad();
@@ -464,8 +485,7 @@ ai.post("/works/:workId/ai/summarize", async (c) => {
 출력 형식: {"summary":"요약","suggestions":[...]}
 ${SUGGEST_FORMAT}${SUGGEST_MORE}
 ${JSON_RULES}`;
-  const out = await run(model, "summarize", prompt, c.req.raw.signal);
-  const j = parseJson(out, "{") as { summary?: unknown; suggestions?: unknown };
+  const { j } = await runJson(model, "summarize", prompt, c.req.raw.signal);
   if (typeof j?.summary !== "string" || !j.summary.trim()) throw bad();
   await saveSummary(workId, chapterId, j.summary.trim());
   await log(workId, target, "summarize", "요약", model.id, j.summary, used);
@@ -493,7 +513,8 @@ ${answers}
 출력 형식: {"title":"제목","world":"세계관","style":"문체","suggestions":[...]}
 ${SUGGEST_FORMAT}
 ${JSON_RULES}`;
-  const j = parseJson(await run(model, "onboard", prompt, c.req.raw.signal), "{") as Record<string, unknown>;
+  const { j } = await runJson(model, "onboard", prompt, c.req.raw.signal);
+  if (!j) throw bad();
   const s = (x: unknown) => (typeof x === "string" ? x.trim() : "");
   if (!s(j?.world) && !s(j?.style)) throw bad();
   return c.json<OnboardResponse>({ title: s(j.title), world: s(j.world), style: s(j.style), suggestions: suggestions(j.suggestions, chapterBounds(null)) });

@@ -47,6 +47,46 @@ function spot(taken: XY[]): XY {
 
 const FONT = "Pretendard, system-ui, sans-serif";
 
+// 색은 테마 변수에서 읽는다(라이트·다크 모두). 변경·추가는 초록, 삭제는 붉은 점선으로 구분한다.
+const NODE_TEXT = "#3a2f2c"; // 노드 채움(KINDS)이 연한 고정색이라 글자도 고정
+function graphStyle(): cytoscape.StylesheetJson {
+  const cs = getComputedStyle(document.documentElement);
+  const v = (name: string) => cs.getPropertyValue(name).trim();
+  const accent = v("--gc-accent"), add = v("--pd-diff-add"), del = v("--pd-diff-del"), text = v("--gc-text"), surface = v("--gc-surface"), line = v("--gc-control-border");
+  return [
+    {
+      selector: "node",
+      style: {
+        label: "data(name)", "font-family": FONT, "font-size": 15, "font-weight": 600, color: NODE_TEXT,
+        "text-valign": "center", "text-halign": "center", shape: "round-rectangle",
+        width: "data(w)", height: 40, "border-width": 2,
+        "background-color": "#FFB1B1", "border-color": "#C9707A",
+      },
+    },
+    ...KINDS.map((k) => ({
+      selector: `node[kind = "${k.value}"]`,
+      style: { "background-color": k.fill, "border-color": k.border },
+    })),
+    { selector: "node:selected", style: { "border-width": 4, "border-color": accent } },
+    {
+      selector: "edge",
+      style: {
+        label: "data(label)", "font-family": FONT, "font-size": 13, color: text,
+        "curve-style": "bezier", "control-point-step-size": 50, width: 2, "line-color": line,
+        "text-background-color": surface, "text-background-opacity": 0.95, "text-background-padding": "3px",
+        "text-background-shape": "roundrectangle",
+      },
+    },
+    { selector: "node.mk-change", style: { "border-width": 5, "border-color": add, "overlay-color": add, "overlay-opacity": 0.2, "overlay-padding": 6 } },
+    { selector: "node.mk-remove", style: { "border-width": 4, "border-color": del, "border-style": "dashed", opacity: 0.65 } },
+    { selector: "edge.mk-change", style: { width: 5, "line-color": add, color: add, "font-weight": 700 } },
+    { selector: "edge.mk-remove", style: { width: 4, "line-color": del, "line-style": "dashed", color: del, "font-weight": 700 } },
+    { selector: "edge.ghost", style: { width: 3, "line-color": add, "line-style": "dashed", color: add, opacity: 0.8 } },
+    { selector: "edge.hl", style: { width: 5, "line-color": accent, color: accent, "font-weight": 700 } },
+  ] as cytoscape.StylesheetJson;
+}
+
+
 export function GraphCanvas({
   workId, nodes, edges, highlight, marks, ghosts, selectedId, fitTick, onSelect,
 }: {
@@ -72,46 +112,24 @@ export function GraphCanvas({
       container: box.current,
       minZoom: 0.3,
       maxZoom: 2.5,
-      style: [
-        {
-          selector: "node",
-          style: {
-            label: "data(name)", "font-family": FONT, "font-size": 15, "font-weight": 600, color: "#3a2f2c",
-            "text-valign": "center", "text-halign": "center", shape: "round-rectangle",
-            width: "data(w)", height: 40, "border-width": 2,
-            "background-color": "#FFB1B1", "border-color": "#C9707A",
-          },
-        },
-        ...KINDS.map((k) => ({
-          selector: `node[kind = "${k.value}"]`,
-          style: { "background-color": k.fill, "border-color": k.border },
-        })),
-        { selector: "node:selected", style: { "border-width": 4, "border-color": "#b4424f" } },
-        {
-          selector: "edge",
-          style: {
-            label: "data(label)", "font-family": FONT, "font-size": 13, color: "#3a2f2c",
-            "curve-style": "bezier", "control-point-step-size": 50, width: 2, "line-color": "#9a8575",
-            "text-background-color": "#fffdf0", "text-background-opacity": 0.95, "text-background-padding": "3px",
-            "text-background-shape": "roundrectangle",
-          },
-        },
-        { selector: "node.mk-change", style: { "border-width": 5, "border-color": "#245bd8", "overlay-color": "#245bd8", "overlay-opacity": 0.12, "overlay-padding": 6 } },
-        { selector: "node.mk-remove", style: { "border-width": 4, "border-color": "#b52a36", "border-style": "dashed", opacity: 0.65 } },
-        { selector: "edge.mk-change", style: { width: 5, "line-color": "#245bd8", color: "#245bd8", "font-weight": 700 } },
-        { selector: "edge.mk-remove", style: { width: 4, "line-color": "#b52a36", "line-style": "dashed", color: "#b52a36", "font-weight": 700 } },
-        { selector: "edge.ghost", style: { width: 3, "line-color": "#245bd8", "line-style": "dashed", color: "#245bd8", opacity: 0.8 } },
-        { selector: "edge.hl", style: { width: 5, "line-color": "#b4424f", color: "#963543", "font-weight": 700 } },
-      ],
+      style: graphStyle(),
     });
     cy.on("tap", "node", (e) => onSelectRef.current(e.target.id()));
     cy.on("tap", (e) => e.target === cy && onSelectRef.current(null));
     cy.on("dragfree", "node", () => savePos(workId, cy));
     const ro = new ResizeObserver(() => cy.resize());
     ro.observe(box.current!);
+    // 라이트·다크가 바뀌면 색을 다시 읽는다.
+    const mq = matchMedia("(prefers-color-scheme: dark)");
+    const restyle = () => cy.style(graphStyle());
+    const mo = new MutationObserver(restyle);
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-color-mode"] });
+    mq.addEventListener("change", restyle);
     cyRef.current = cy;
     didFit.current = false;
     return () => {
+      mo.disconnect();
+      mq.removeEventListener("change", restyle);
       ro.disconnect();
       cy.destroy();
       cyRef.current = null;

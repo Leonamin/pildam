@@ -36,10 +36,11 @@ export function GraphAiPanel({
       historyKey={tick}
       busy={busy}
       emptyText={<>관계도를 바꿔 달라고 말해 보세요.<br />AI가 제안하면 골라서 반영해요.</>}
-      entryActions={(e) =>
-        result && e.instruction === result.instruction && Date.parse(e.at) >= result.at - 5000 && (
+      // 방금 받은 답은 전문을 말풍선으로 한 번만 보이고, 기록의 한 줄 미리보기는 대신 숨긴다.
+      entryResult={(e) =>
+        result && e.instruction === result.instruction && Date.parse(e.at) >= result.at - 5000 ? (
           <p className="m-0 mt-2 whitespace-pre-wrap break-words rounded-lg bg-accent-soft p-2 text-sm">{result.reply}</p>
-        )
+        ) : null
       }
     >
       {(ctx) => (

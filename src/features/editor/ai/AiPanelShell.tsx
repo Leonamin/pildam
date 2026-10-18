@@ -10,6 +10,7 @@
 //   historyKey={number}                  값이 바뀌면 기록을 다시 불러온다 (AI 호출이 끝날 때마다 올린다)
 //   busy={boolean}                       AI 실행 중이면 true (AI 고르기·노트 붙이기 잠금)
 //   header?={ReactNode}                  AI 고르기 아래 줄 (예: 이전 버전 버튼)
+//   entryResult?={(e: ChatEntry) => ReactNode | null}   기록 한 줄의 결과 미리보기를 대신할 내용 (null이면 미리보기)
 //   entryActions?={(e: ChatEntry) => ReactNode}   기록 한 줄 아래 버튼 (예: 되돌리기)
 //   emptyText?={ReactNode}               기록이 없을 때 안내 문구
 // >
@@ -59,7 +60,7 @@ export function useModelSelect(work: Work, onWork: (w: Work) => void, onError: (
 }
 
 export function AiPanelShell({
-  work, target, notes, onWork, onOpenNote, historyKey, busy, header, entryActions, emptyText, children,
+  work, target, notes, onWork, onOpenNote, historyKey, busy, header, entryResult, entryActions, emptyText, children,
 }: {
   work: Work;
   target: AiTarget | null;
@@ -69,6 +70,7 @@ export function AiPanelShell({
   historyKey: number;
   busy: boolean;
   header?: ReactNode;
+  entryResult?: (e: ChatEntry) => ReactNode | null;
   entryActions?: (e: ChatEntry) => ReactNode;
   emptyText?: ReactNode;
   children: (ctx: ShellContext) => ReactNode;
@@ -143,7 +145,7 @@ export function AiPanelShell({
                   <time dateTime={e.at}>{relativeTime(e.at)}</time>
                 </div>
                 <p className="m-0 mt-1 break-words">{e.instruction}</p>
-                {e.resultPreview && <p className="m-0 mt-1 line-clamp-2 text-xs text-muted">{e.resultPreview}</p>}
+                {entryResult?.(e) ?? (e.resultPreview && <p className="m-0 mt-1 line-clamp-2 text-xs text-muted">{e.resultPreview}</p>)}
                 {used && used.length > 0 && (
                   <p className="m-0 mt-1 text-xs text-muted">
                     참고한 노트:{" "}
