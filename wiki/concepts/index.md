@@ -15,3 +15,6 @@ okf_version: "0.1"
 - [컨텍스트 조립](context-assembly.md) — 매 호출마다 보내는 내용
 - [관계도](relationship-graph.md) — 인물·세계관 그래프와 회차별 관계 변화
 - [데이터 구조](data-layout.md) — 파일 저장 구조
+- [테마와 팔레트](theme-palette.md) — 팔레트 → 토큰·Tailwind 이름
+- [코드 구조](code-structure.md) — 폴더별 책임
+- [개발 방식](development-workflow.md) — 실행 명령, 연습용 AI, 에이전트 분업

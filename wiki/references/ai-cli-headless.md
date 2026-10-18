@@ -24,3 +24,5 @@ okf_version: "0.1"
 - `gpt-oss-120b-medium`
 
 모델 목록은 CLI 업데이트에 따라 바뀌므로 `models.json` 갱신 시 다시 확인한다.
+
+실제로 쓰는 안전 옵션과 스트림 형식은 [ADR 0010](../decisions/0010-isolated-cli-execution.md)에 있다. Codex 기본 모델은 2026-10-18 기준 `gpt-6.1-sol`(`~/.codex/config.toml`).

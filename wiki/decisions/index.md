@@ -16,3 +16,5 @@ okf_version: "0.1"
 - [0006. 에디터는 Tiptap, 저장은 일반 텍스트](0006-tiptap-with-plain-text-storage.md)
 - [0007. 릴리스 폴더 + systemd로 배포한다](0007-deploy-with-release-symlink-and-systemd.md)
 - [0008. 선택 수정은 인라인 비교, 대필은 바로 삽입](0008-inline-diff-for-selection-direct-insert-for-ghostwriting.md)
+- [0009. 프론트엔드는 Tailwind v4 + Goodcase UI를 cascade layer로 함께 쓴다](0009-tailwind-with-goodcase-ui-layers.md)
+- [0010. AI CLI는 도구 없이·격리해서 실행한다](0010-isolated-cli-execution.md)
