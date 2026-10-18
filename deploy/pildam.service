@@ -1,0 +1,19 @@
+# 사용자 서비스: CLI 로그인 정보(~/.claude, ~/.codex, agy)를 쓰려고 leonamin 계정으로 돈다.
+# 설치: cp deploy/pildam.service ~/.config/systemd/user/
+[Unit]
+Description=필담 (pildam)
+After=network-online.target
+
+[Service]
+WorkingDirectory=/opt/pildam/current
+ExecStart=/home/leonamin/.nvm/versions/node/v24.17.0/bin/node server/index.ts
+Environment=NODE_ENV=production
+Environment=PILDAM_DATA=/opt/pildam-data
+Environment=PORT=8310
+Environment=PATH=/home/leonamin/.local/bin:/home/leonamin/.nvm/versions/node/v24.17.0/bin:/usr/local/bin:/usr/bin:/bin
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target
