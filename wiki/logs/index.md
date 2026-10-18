@@ -8,5 +8,6 @@ okf_version: "0.1"
 
 # Logs
 
+- [2026-10-18 QA 결과와 남은 위험](2026-10-18-qa-results.md)
 - [2026-10-18 MVP 프로토타입 구현 기록](2026-10-18-prototype-implementation.md)
 - [2026-10-18 위키 초기 설정](2026-10-18-wiki-setup.md)

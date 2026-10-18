@@ -18,3 +18,4 @@ okf_version: "0.1"
 - [테마와 팔레트](theme-palette.md) — 팔레트 → 토큰·Tailwind 이름
 - [코드 구조](code-structure.md) — 폴더별 책임
 - [개발 방식](development-workflow.md) — 실행 명령, 연습용 AI, 에이전트 분업
+- [알려진 위험과 미검증 항목](known-issues.md) — QA 뒤 남은 위험과 다시 확인할 것
