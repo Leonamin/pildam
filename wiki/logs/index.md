@@ -8,6 +8,7 @@ okf_version: "0.1"
 
 # Logs
 
+- [2026-10-18 설정 노트 배포와 운영 데이터 이관](2026-10-18-notes-deploy.md)
 - [2026-10-18 설정 노트·공통 AI 패널·관계도 채팅](2026-10-18-setting-notes-and-unified-ai.md)
 - [2026-10-18 첫 배포](2026-10-18-first-deploy.md)
 - [2026-10-18 QA 결과와 남은 위험](2026-10-18-qa-results.md)
