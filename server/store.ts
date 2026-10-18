@@ -3,9 +3,10 @@ import { randomUUID } from "node:crypto";
 import { access, appendFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import type {
-  ApiError, Chapter, ChapterMeta, ChatEntry, DocName, Graph, ModelOption, Provider, SnapshotMeta,
-  SnapshotReason, TextDoc, Work, WorkSummary,
+  AiTarget, ApiError, Chapter, ChapterMeta, ChatEntry, DocName, Graph, GraphEdge, GraphNode, ModelOption, NodeKind,
+  Note, NoteMeta, Provider, SnapshotMeta, SnapshotReason, TextDoc, Work, WorkSummary,
 } from "../shared/types.ts";
+import { recap, splitNote } from "./notes.ts";
 
 export const dataDir = resolve(process.env.PILDAM_DATA ?? "./data");
 const worksDir = join(dataDir, "works");
@@ -29,7 +30,8 @@ const ID = /^[a-z0-9-]{1,40}$/;
 export const checkId = (id: unknown): string => (typeof id === "string" && ID.test(id) ? id : badRequest());
 export const str = (v: unknown, max: number, min = 0): string =>
   typeof v === "string" && v.length >= min && v.length <= max ? v : badRequest();
-export const DOC_NAMES: DocName[] = ["world", "style", "notes"];
+export const DOC_NAMES: DocName[] = ["style"];
+export const KINDS: NodeKind[] = ["character", "place", "faction", "item"];
 export async function readBody(req: Request): Promise<Record<string, unknown>> {
   const b: unknown = await req.json().catch(() => null);
   return b && typeof b === "object" && !Array.isArray(b) ? (b as Record<string, unknown>) : badRequest();
@@ -179,11 +181,135 @@ export async function getGraph(workId: string): Promise<Graph> {
   const g = JSON.parse((await readText(join(dir(workId), "graph.json"))) ?? '{"nodes":[],"edges":[]}');
   return { nodes: g.nodes, edges: g.edges, updatedAt: w.docs.graph ?? "" };
 }
+// 노드가 잘못되면 400, 끊어진 관계선은 조용히 버린다.
+function cleanGraph(g: { nodes?: unknown; edges?: unknown }) {
+  const s = (v: unknown, max: number, min = 0) => (typeof v === "string" && v.length >= min && v.length <= max ? v : badRequest());
+  const nodes: GraphNode[] = (g.nodes as Record<string, unknown>[]).map((n) => ({
+    id: s(n?.id, 60, 1), name: s(n.name, 200, 1), description: s(n.description, 5000),
+    kind: KINDS.includes(n.kind as NodeKind) ? (n.kind as NodeKind) : badRequest(),
+  }));
+  const ids = new Set(nodes.map((n) => n.id));
+  const orNull = (v: unknown) => (typeof v === "string" && v ? v : null);
+  const edges: GraphEdge[] = (g.edges as Record<string, unknown>[]).flatMap((e) =>
+    typeof e?.id === "string" && typeof e.source === "string" && typeof e.target === "string" && ids.has(e.source) && ids.has(e.target)
+      ? [{ id: e.id, source: e.source, target: e.target, label: typeof e.label === "string" ? e.label.slice(0, 200) : "",
+        fromChapterId: orNull(e.fromChapterId), toChapterId: orNull(e.toChapterId) }]
+      : []);
+  return { nodes, edges };
+}
 export const putGraph = (workId: string, graph: { nodes?: unknown; edges?: unknown }, base: string) =>
   mutate(workId, async (w) => {
     if ((w.docs.graph ?? "") !== base) fail(409, "conflict", "다른 곳에서 먼저 저장된 내용이 있어요.");
-    await writeAtomic(join(dir(workId), "graph.json"), JSON.stringify({ nodes: graph.nodes, edges: graph.edges }, null, 2));
+    await writeAtomic(join(dir(workId), "graph.json"), JSON.stringify(cleanGraph(graph), null, 2));
     return { updatedAt: (w.docs.graph = now()) };
+  });
+
+// ── 설정 노트: notes.json(순서 있는 NoteMeta[]) + notes/<noteId>.txt ──
+// 없으면(예전 작품) world.txt·notes.txt를 노트로 옮긴다. 옛 파일은 .migrated로 이름만 바꿔 남긴다.
+// 반드시 작품 잠금 안에서 부른다.
+const notePath = (workId: string, noteId: string) => join(dir(workId), "notes", `${checkId(noteId)}.txt`);
+const mkMeta = (title: string, folder: string, text: string, pinned = false): NoteMeta =>
+  ({ id: newId(), title, folder, pinned, recap: recap(text), size: text.length, updatedAt: now() });
+async function readNotes(workId: string): Promise<NoteMeta[]> {
+  const f = join(dir(workId), "notes.json");
+  const t = await readText(f);
+  if (t) return JSON.parse(t);
+  const metas: NoteMeta[] = [];
+  const moved: string[] = [];
+  for (const [file, folder] of [["world.txt", "세계관"], ["notes.txt", "메모"]]) {
+    const body = await readText(join(dir(workId), file));
+    if (body === null) continue;
+    moved.push(file);
+    if (!body.trim()) continue;
+    const m = mkMeta(folder, folder, body);
+    await mkdir(join(dir(workId), "notes"), { recursive: true });
+    await writeAtomic(notePath(workId, m.id), body);
+    metas.push(m);
+  }
+  await writeAtomic(f, JSON.stringify(metas, null, 2));
+  await Promise.all(moved.map((n) => rename(join(dir(workId), n), join(dir(workId), `${n}.migrated`))));
+  return metas;
+}
+const saveNotes = (workId: string, list: NoteMeta[]) => writeAtomic(join(dir(workId), "notes.json"), JSON.stringify(list, null, 2));
+const findNote = (list: NoteMeta[], noteId: string) =>
+  list.find((n) => n.id === checkId(noteId)) ?? fail(404, "not_found", "노트를 찾을 수 없어요.");
+const noteText = async (workId: string, noteId: string) => (await readText(notePath(workId, noteId))) ?? "";
+
+export const listNotes = (workId: string) => locked(workId, async () => (await loadWork(workId), readNotes(workId)));
+export const notesWithText = (workId: string) =>
+  locked(workId, async () => {
+    await loadWork(workId);
+    return Promise.all((await readNotes(workId)).map(async (meta) => ({ meta, text: await noteText(workId, meta.id) })));
+  });
+export const getNote = (workId: string, noteId: string): Promise<Note> =>
+  locked(workId, async () => {
+    await loadWork(workId);
+    const meta = findNote(await readNotes(workId), noteId);
+    return { meta, text: await noteText(workId, meta.id), updatedAt: meta.updatedAt };
+  });
+export const reorderNotes = (workId: string, order: unknown) =>
+  mutate(workId, async () => {
+    const list = await readNotes(workId);
+    if (!Array.isArray(order) || order.length !== list.length || !list.every((n) => order.includes(n.id))) badRequest();
+    const next = (order as string[]).map((i) => list.find((n) => n.id === i)!);
+    await saveNotes(workId, next);
+    return next;
+  });
+const noteTitle = (v: unknown) => str(typeof v === "string" ? v.trim() : v, 80, 1);
+const noteFolder = (v: unknown) => {
+  const f = str(typeof v === "string" ? v.trim() : v, 40);
+  return f.includes("/") ? badRequest() : f;
+};
+export const createNote = (workId: string, p: { title?: unknown; folder?: unknown; text?: unknown }) =>
+  mutate(workId, async () => {
+    const text = p.text === undefined ? "" : str(p.text, 400_000);
+    const m = mkMeta(noteTitle(p.title), noteFolder(p.folder), text);
+    const list = await readNotes(workId);
+    await mkdir(join(dir(workId), "notes"), { recursive: true });
+    await writeAtomic(notePath(workId, m.id), text);
+    await saveNotes(workId, [...list, m]);
+    return m;
+  });
+export const putNote = (workId: string, noteId: string, text: string, base: string) =>
+  mutate(workId, async () => {
+    const list = await readNotes(workId);
+    const m = findNote(list, noteId);
+    if (m.updatedAt !== base) fail(409, "conflict", "다른 곳에서 먼저 저장된 내용이 있어요.");
+    await writeAtomic(notePath(workId, m.id), text);
+    Object.assign(m, { recap: recap(text), size: text.length, updatedAt: now() });
+    await saveNotes(workId, list);
+    return { updatedAt: m.updatedAt };
+  });
+export const patchNote = (workId: string, noteId: string, p: { title?: unknown; folder?: unknown; pinned?: unknown }) =>
+  mutate(workId, async () => {
+    const list = await readNotes(workId);
+    const m = findNote(list, noteId);
+    if (p.title !== undefined) m.title = noteTitle(p.title);
+    if (p.folder !== undefined) m.folder = noteFolder(p.folder);
+    if (p.pinned !== undefined) m.pinned = typeof p.pinned === "boolean" ? p.pinned : badRequest();
+    await saveNotes(workId, list);
+    return m;
+  });
+export const deleteNote = (workId: string, noteId: string) =>
+  mutate(workId, async () => {
+    const list = await readNotes(workId);
+    const m = findNote(list, noteId);
+    await saveNotes(workId, list.filter((n) => n !== m));
+    await Promise.all([rm(notePath(workId, m.id), { force: true }), rm(chatPath(workId, { type: "note", noteId: m.id }), { force: true })]);
+  });
+export const splitNoteById = (workId: string, noteId: string) =>
+  mutate(workId, async () => {
+    const list = await readNotes(workId);
+    const m = findNote(list, noteId);
+    const chunks = splitNote(await noteText(workId, m.id)) ?? fail(400, "bad_request", "나눌 만한 제목줄이 없어요.");
+    const added = chunks.slice(1).map((c) => mkMeta(c.title, m.folder, c.text));
+    await mkdir(join(dir(workId), "notes"), { recursive: true });
+    await Promise.all(added.map((a, i) => writeAtomic(notePath(workId, a.id), chunks[i + 1].text)));
+    await writeAtomic(notePath(workId, m.id), chunks[0].text);
+    Object.assign(m, { title: chunks[0].title.slice(0, 80) || m.title, recap: recap(chunks[0].text), size: chunks[0].text.length, updatedAt: now() });
+    list.splice(list.indexOf(m) + 1, 0, ...added);
+    await saveNotes(workId, list);
+    return list;
   });
 
 // ── 화 ──
@@ -269,16 +395,24 @@ export async function getSnapshot(workId: string, chapterId: string, snapshotId:
   return { text: t ?? fail(404, "not_found", "기록을 찾을 수 없어요.") };
 }
 
-// ── 지시 기록: chat/<챕터ID>.jsonl ──
-export async function readChat(workId: string, chapterId: string, last?: number): Promise<ChatEntry[]> {
-  const t = (await readText(join(dir(workId), "chat", `${checkId(chapterId)}.jsonl`))) ?? "";
-  const all = t.split("\n").filter(Boolean).map((l) => JSON.parse(l) as ChatEntry);
+// ── 지시 기록: chat/<챕터ID>.jsonl (예전 그대로), style.jsonl, graph.jsonl, note-<노트ID>.jsonl ──
+export function parseTarget(key: unknown): AiTarget {
+  if (key === "style" || key === "graph") return { type: key };
+  const m = typeof key === "string" ? /^(chapter|note):(.+)$/.exec(key) : null;
+  if (!m) return badRequest();
+  return m[1] === "chapter" ? { type: "chapter", chapterId: checkId(m[2]) } : { type: "note", noteId: checkId(m[2]) };
+}
+const chatPath = (workId: string, t: AiTarget) =>
+  join(dir(workId), "chat", `${t.type === "chapter" ? t.chapterId : t.type === "note" ? `note-${t.noteId}` : t.type}.jsonl`);
+export async function readChat(workId: string, t: AiTarget, last?: number): Promise<ChatEntry[]> {
+  const text = (await readText(chatPath(workId, t))) ?? "";
+  const all = text.split("\n").filter(Boolean).map((l) => JSON.parse(l) as ChatEntry);
   return last ? all.slice(-last) : all;
 }
-export const appendChat = (workId: string, chapterId: string, e: Omit<ChatEntry, "id" | "at">) =>
+export const appendChat = (workId: string, t: AiTarget, e: Omit<ChatEntry, "id" | "at">) =>
   mutate(workId, async (w) => {
-    findChapter(w, chapterId);
-    const d = join(dir(workId), "chat");
-    await mkdir(d, { recursive: true });
-    await appendFile(join(d, `${chapterId}.jsonl`), JSON.stringify({ id: newId(), at: now(), ...e }) + "\n");
+    if (t.type === "chapter") findChapter(w, t.chapterId);
+    if (t.type === "note") findNote(await readNotes(workId), t.noteId);
+    await mkdir(join(dir(workId), "chat"), { recursive: true });
+    await appendFile(chatPath(workId, t), JSON.stringify({ id: newId(), at: now(), ...e }) + "\n");
   });

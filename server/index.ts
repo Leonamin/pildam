@@ -7,7 +7,7 @@ import type { ApiError, DocName, SnapshotReason } from "../shared/types.ts";
 import { ai } from "./ai.ts";
 import { auth, sessionUser } from "./auth.ts";
 import * as store from "./store.ts";
-import { ApiErr, DOC_NAMES, fail, readBody, str } from "./store.ts";
+import { ApiErr, checkId, DOC_NAMES, fail, readBody, str } from "./store.ts";
 
 const app = new Hono();
 
@@ -73,8 +73,26 @@ app.get("/api/works/:workId/chapters/:chapterId/snapshots", async (c) =>
   c.json(await store.listSnapshots(c.req.param("workId"), c.req.param("chapterId"))));
 app.get("/api/works/:workId/chapters/:chapterId/snapshots/:snapshotId", async (c) =>
   c.json(await store.getSnapshot(c.req.param("workId"), c.req.param("chapterId"), c.req.param("snapshotId"))));
-app.get("/api/works/:workId/chapters/:chapterId/chat", async (c) =>
-  c.json(await store.readChat(c.req.param("workId"), c.req.param("chapterId"))));
+app.get("/api/works/:workId/chapters/:chapterId/chat", async (c) => // 예전 경로
+  c.json(await store.readChat(c.req.param("workId"), { type: "chapter", chapterId: checkId(c.req.param("chapterId")) })));
+app.get("/api/works/:workId/chat", async (c) =>
+  c.json(await store.readChat(c.req.param("workId"), store.parseTarget(c.req.query("target")))));
+
+app.get("/api/works/:workId/notes", async (c) => c.json(await store.listNotes(c.req.param("workId"))));
+app.patch("/api/works/:workId/notes", async (c) =>
+  c.json(await store.reorderNotes(c.req.param("workId"), (await readBody(c.req.raw)).order)));
+app.post("/api/works/:workId/notes", async (c) => c.json(await store.createNote(c.req.param("workId"), await readBody(c.req.raw))));
+app.get("/api/works/:workId/notes/:noteId", async (c) => c.json(await store.getNote(c.req.param("workId"), c.req.param("noteId"))));
+app.put("/api/works/:workId/notes/:noteId", async (c) => {
+  const b = await readBody(c.req.raw);
+  return c.json(await store.putNote(c.req.param("workId"), c.req.param("noteId"), str(b.text, 400_000), str(b.baseUpdatedAt, 50)));
+});
+app.patch("/api/works/:workId/notes/:noteId", async (c) =>
+  c.json(await store.patchNote(c.req.param("workId"), c.req.param("noteId"), await readBody(c.req.raw))));
+app.delete("/api/works/:workId/notes/:noteId", async (c) =>
+  (await store.deleteNote(c.req.param("workId"), c.req.param("noteId")), c.body(null, 204)));
+app.post("/api/works/:workId/notes/:noteId/split", async (c) =>
+  c.json(await store.splitNoteById(c.req.param("workId"), c.req.param("noteId"))));
 
 app.all("/api/*", () => fail(404, "not_found", "찾을 수 없어요."));
 

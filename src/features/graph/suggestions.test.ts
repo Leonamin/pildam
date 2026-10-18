@@ -28,3 +28,18 @@ test("edgesAt: 구간 경계 포함", () => {
   assert.deepEqual(edgesAt(g, order, 1).map((e) => e.id), ["a"]);
   assert.deepEqual(edgesAt(g, order, 2).map((e) => e.id), ["b"]);
 });
+
+test("applySuggestions: 노드 고치기·지우기, 관계 지우기", () => {
+  let g = applySuggestions(empty, [
+    { type: "add-edge", sourceName: "민지", targetName: "서준", label: "연인", fromChapterId: null },
+    { type: "add-edge", sourceName: "민지", targetName: "지호", label: "친구", fromChapterId: null },
+  ]);
+  g = applySuggestions(g, [
+    { type: "update-node", name: "민지", node: { name: "민지아", description: "주인공" } },
+    { type: "remove-edge", sourceName: "서준", targetName: "민지아", label: "연인" },
+    { type: "remove-node", name: "지호" },
+  ]);
+  assert.deepEqual(g.nodes.map((n) => n.name).sort(), ["민지아", "서준"]);
+  assert.equal(g.nodes.find((n) => n.name === "민지아")?.description, "주인공");
+  assert.equal(g.edges.length, 0);
+});
