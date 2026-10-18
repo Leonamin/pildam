@@ -83,7 +83,8 @@ export function AiPanel({
   useEffect(() => {
     listEnd.current?.scrollIntoView({ block: "end" });
   }, [chat]);
-  useEffect(() => () => { ctl.current?.abort(); }, []);
+  // 쓰는 중에 다른 화로 옮기면 멈춘다(안 그러면 옮기기 전 화에만 글이 반쯤 남는다).
+  useEffect(() => () => { ctl.current?.abort(); }, [chapterId]);
 
   const modelId = work.modelId;
   const modelOptions = models?.map((m) => ({ value: m.id, label: m.label })) ?? [];

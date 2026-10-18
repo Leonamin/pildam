@@ -112,6 +112,8 @@ export function WorkspacePage() {
     />
   );
   const inlineOutline = desktop || mobile;
+  // 화면이 바뀌는 사이 이미 닫힌 에디터를 쓰면 화면 전체가 멈추므로, 지금 화의 에디터일 때만 쓴다.
+  const live = !docName && chapter && bridge?.chapterId === chapter.id ? bridge : null;
   const bothOff = !mobile && !panels.manuscript && !panels.ai;
 
   return (
@@ -154,7 +156,7 @@ export function WorkspacePage() {
               work={work}
               chapter={docName ? null : chapter}
               previous={previous}
-              bridge={docName ? null : bridge}
+              bridge={live}
               onWork={setWork}
               onBusy={setAiBusy}
               askSummary={!!chapter && askFor === chapter.id && !!previous && !previous.hasSummary}
@@ -164,8 +166,8 @@ export function WorkspacePage() {
         </aside>
       </div>
 
-      {bridge && work && chapter && !docName && visible("manuscript") && (
-        <SelectionRewrite key={chapter.id} editor={bridge.editor} workId={work.id} chapterId={chapter.id} modelId={work.modelId} disabled={aiBusy} save={bridge.save} />
+      {live && work && chapter && visible("manuscript") && (
+        <SelectionRewrite key={chapter.id} editor={live.editor} workId={work.id} chapterId={chapter.id} modelId={work.modelId} disabled={aiBusy} save={live.save} />
       )}
       <PanelDock pressed={{ outline: visible("outline"), manuscript: visible("manuscript"), ai: visible("ai") }} onToggle={toggle} />
     </AppShell>

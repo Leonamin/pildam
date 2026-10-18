@@ -19,6 +19,8 @@ import "./editor.css";
 
 export type EditorBridge = {
   editor: Editor;
+  /** 이 에디터가 열고 있는 화 (설정 문서면 없음). 화면이 바뀌는 사이 낡은 에디터를 걸러내는 데 쓴다. */
+  chapterId?: string;
   /** 지금 원고를 저장(snapshot이 있으면 덮어쓰기 전 본문을 스냅샷으로 남김). */
   save: (snapshot?: SnapshotReason) => Promise<unknown>;
   getText: () => string;
@@ -92,9 +94,10 @@ function EditorView({
     onBlur: () => void doc.save(),
   });
   const { save } = doc;
+  const chapterId = target.kind === "chapter" ? target.id : undefined;
   const bridge = useMemo(
-    () => editor && { editor, save, getText: () => docToText(editor.state.doc) },
-    [editor, save],
+    () => editor && { editor, chapterId, save, getText: () => docToText(editor.state.doc) },
+    [editor, save, chapterId],
   );
   useEffect(() => {
     onReady(bridge);

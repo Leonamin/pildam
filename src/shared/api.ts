@@ -23,6 +23,8 @@ async function toError(res: Response): Promise<ApiRequestError> {
   if (res.status === 401 && location.pathname !== "/login" && body.error !== "invalid_credentials") {
     location.assign("/login");
   }
+  // 서버가 꺼져 있으면 프록시가 JSON 없는 5xx를 돌려준다.
+  if (!body.error && res.status >= 500) return new ApiRequestError("network", NETWORK_MSG, res.status);
   return new ApiRequestError(body.error ?? "unknown", body.message ?? "문제가 생겼어요. 다시 해 주세요.", res.status);
 }
 

@@ -63,8 +63,9 @@ export function useDocSave(url: string, initialText: string, initialUpdatedAt: s
   }, []);
 
   useEffect(() => {
-    const onHide = () => {
+    const onHide = (e: BeforeUnloadEvent) => {
       if (stopped.current || text.current === saved.current) return;
+      e.preventDefault(); // 저장 안 된 글이 있으면 브라우저가 떠날지 한 번 묻는다
       // 창을 닫는 순간에도 요청이 끝까지 가도록 keepalive
       void fetch(url, {
         method: "PUT",

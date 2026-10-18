@@ -74,11 +74,11 @@ export function SelectionRewrite({
       setDiff(editor, null);
       editor.setEditable(true);
       setPhase(null);
-      setSel(null);
       setInstruction("");
       if (focus) editor.commands.focus();
+      refresh(); // 글이 그대로 선택돼 있으면 처음 메뉴로 돌아간다
     },
-    [editor],
+    [editor, refresh],
   );
 
   useEffect(() => {
@@ -137,6 +137,14 @@ export function SelectionRewrite({
     editor.commands.focus();
     void save("ai-rewrite");
   }
+
+  // 모바일 아래 시트가 비교 글을 가리면 글을 시트 위로 올린다.
+  useEffect(() => {
+    if (phase?.t !== "diff" || !window.matchMedia("(max-width: 767px)").matches) return;
+    const add = editor.view.dom.querySelector<HTMLElement>(".ai-add");
+    const sheet = document.querySelector<HTMLElement>('[aria-label="AI 글 고치기"]');
+    if (add && add.getBoundingClientRect().bottom > window.innerHeight - (sheet?.offsetHeight ?? 0) - 16) add.scrollIntoView({ block: "center" });
+  }, [phase, editor]);
 
   const anchor = phase ? (phase.t === "custom" ? phase.range.to : phase.run.to) : sel?.to;
   if (anchor === undefined) return null;
@@ -217,15 +225,22 @@ function Floating({ editor, pos, children }: { editor: Editor; pos: number; chil
   const [style, setStyle] = useState<React.CSSProperties>({ visibility: "hidden" });
   const place = useCallback(() => {
     try {
-      const c = editor.view.coordsAtPos(pos);
+      // 비교 글(초록)이 있으면 그 끝줄 아래에 놓아 비교 글을 가리지 않는다.
+      const rects = editor.view.dom.querySelector(".ai-add")?.getClientRects();
+      const c = rects?.length ? rects[rects.length - 1] : editor.view.coordsAtPos(pos);
       const w = Math.min(470, window.innerWidth - 24);
       const left = Math.max(12, Math.min(c.left - 40, window.innerWidth - w - 12));
       const below = c.bottom + 150 < window.innerHeight;
-      setStyle({ left, width: w, ...(below ? { top: c.bottom + 10 } : { top: c.top - 10, transform: "translateY(-100%)" }) });
+      const next: React.CSSProperties = { left, width: w, ...(below ? { top: c.bottom + 10 } : { top: c.top - 10, transform: "translateY(-100%)" }) };
+      setStyle((p) => (JSON.stringify(p) === JSON.stringify(next) ? p : next));
     } catch {
       /* 위치를 못 구하면 숨김 유지 */
     }
   }, [editor, pos]);
+  // 후보를 넘기면 비교 글 길이가 달라지므로 그릴 때마다 다시 잡는다.
+  useLayoutEffect(() => {
+    if (!mobile) place();
+  });
   useLayoutEffect(() => {
     if (mobile) return;
     place();
